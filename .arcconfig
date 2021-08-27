@@ -1,0 +1,7 @@
+{
+  "phabricator.uri": "https://phabricator.sourcevertex.net",
+  "arc.land.onto.default": "poplar/r2.4/release",
+  "arc.land.onto": [
+    "poplar/r2.4/release"
+  ]
+}
