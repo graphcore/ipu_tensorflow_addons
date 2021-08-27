@@ -1,0 +1,37 @@
+.DS_Store
+.ipynb_checkpoints
+node_modules
+/.bazelrc.user
+/bazel-*
+/bazel_pip
+/pip_test
+/_python_build
+*.pyc
+__pycache__
+*.swp
+.vscode/
+cmake_build/
+.idea/**
+/build/
+[Bb]uild/
+*.whl
+.bazelrc
+
+# Android
+.gradle
+.idea
+*.iml
+local.properties
+gradleBuild
+
+# iOS
+*.pbxproj
+*.xcworkspace
+/*.podspec
+Podfile.lock
+Pods
+xcuserdata
+.linters
+
+errors.log
+tests.log
