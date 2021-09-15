@@ -7,17 +7,18 @@ from __future__ import print_function
 import os
 import numpy as np
 import pva
-import tensorflow.compiler.plugin.poplar.tests.test_utils as tu
-from tensorflow.compiler.tests import xla_test
 from tensorflow.python import ipu
-from tensorflow.python.platform import googletest
+from tensorflow.python.eager import def_function
 from tensorflow.python.framework import ops
+from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variables
+from tensorflow.python.platform import googletest
 
+from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons import layers
 
 dataType = np.float16
@@ -52,7 +53,7 @@ def _tfLSTM(x, h, c):
                          time_major=True)
 
 
-class LstmSizeTest(xla_test.XLATestCase):
+class LstmSizeTest(test_util.TensorFlowTestCase):
   def RunLayer(self, layer_func, x):
     cfg = ipu.utils.IPUConfig()
     report_helper = tu.ReportHelper()
@@ -84,6 +85,7 @@ class LstmSizeTest(xla_test.XLATestCase):
   # Test which verifies that:
   # 1. Custom op uses less memory
   # 2. Custom op and Tf op return the same result
+  @test_util.deprecated_graph_mode_only
   def testCustomOpIsSmaller(self):
     np.random.seed(42)
     x = np.random.rand(timesteps, batch_size, num_input).astype(dataType)
