@@ -6,6 +6,3 @@ from ipu_tensorflow_addons.v1.layers.rnn_ops import PopnnGRU
 from ipu_tensorflow_addons.v1.layers.rnn_ops import PopnnDynamicGRU
 from ipu_tensorflow_addons.v1.layers.rnn_ops import PopnnAUGRU
 
-# Registers gradient functions for the rnn layers.
-from ipu_tensorflow_addons.v1.layers import rnn_ops_grad
-

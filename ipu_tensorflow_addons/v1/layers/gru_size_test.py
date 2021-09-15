@@ -7,17 +7,18 @@ from __future__ import print_function
 import os
 import numpy as np
 import pva
-from tensorflow.compiler.plugin.poplar.tests import test_utils as tu
-from tensorflow.compiler.tests import xla_test
 from tensorflow.python import ipu
-from tensorflow.python.platform import googletest
+from tensorflow.python.eager import def_function
 from tensorflow.python.framework import ops
+from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variables
+from tensorflow.python.platform import googletest
 
+from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons.v1 import layers
 
 dataType = np.float16
@@ -38,7 +39,7 @@ def _PopnnGRU(x, initial_state):
 
 
 def _tfGRU(x, initial_state):
-  gru_cell = layers.GRUCell(
+  gru_cell = rnn_cell.GRUCell(
       num_hidden,
       name='gru_cell',
       kernel_initializer=init_ops.zeros_initializer(dtype=dataType),
@@ -50,7 +51,7 @@ def _tfGRU(x, initial_state):
                          time_major=True)
 
 
-class GRUSizeTest(xla_test.XLATestCase):
+class GRUSizeTest(test_util.TensorFlowTestCase):
   def RunLayer(self, layer_func, x):
     cfg = ipu.utils.IPUConfig()
     report_helper = tu.ReportHelper()
@@ -81,6 +82,7 @@ class GRUSizeTest(xla_test.XLATestCase):
   # Test which verifies that:
   # 1. Custom op uses less memory
   # 2. Custom op and Tf op return the same result
+  @test_util.deprecated_graph_mode_only
   def testCustomOpIsSmaller(self):
     np.random.seed(42)
     x = np.random.rand(timesteps, batch_size, num_input).astype(dataType)

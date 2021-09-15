@@ -7,10 +7,10 @@ from __future__ import print_function
 # Naive GRU to learn three-char time steps to one-char mapping
 
 import numpy as np
-from tensorflow.compiler.tests import xla_test
 from tensorflow.python import ipu
-from tensorflow.python.platform import googletest
+from tensorflow.python.eager import def_function
 from tensorflow.python.framework import ops
+from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
@@ -18,6 +18,7 @@ from tensorflow.python.ops import nn
 from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variables
+from tensorflow.python.platform import googletest
 from tensorflow.python.training import gradient_descent
 from tensorflow.python.ipu.config import IPUConfig
 
@@ -109,7 +110,7 @@ def get_one_hot(a, num_classes):
   return np.squeeze(np.eye(num_classes)[a.reshape(-1)])
 
 
-class GRUTrainingTest(xla_test.XLATestCase):
+class GRUTrainingTest(test_util.TensorFlowTestCase):
   def _RunLayer(self, layer_func, x, y, s=None):
     with self.session() as sess:
       with ops.device('cpu'):
@@ -142,6 +143,7 @@ class GRUTrainingTest(xla_test.XLATestCase):
     return losses
 
   # Check that the loss goes down (and is identical to reference version).
+  @test_util.deprecated_graph_mode_only
   def testTraining(self):
     np.random.seed(42)
     nums = np.arange(batch_size + seq_len)
@@ -166,6 +168,7 @@ class GRUTrainingTest(xla_test.XLATestCase):
     self.assertTrue(ref_losses[0] > ref_losses[-1])
     self.assertAllClose(custom_losses, ref_losses, rtol=0.05)
 
+  @test_util.deprecated_graph_mode_only
   def testTrainingWithSeqLen(self):
     np.random.seed(42)
     nums = np.arange(batch_size + seq_len)
@@ -192,6 +195,7 @@ class GRUTrainingTest(xla_test.XLATestCase):
     self.assertTrue(ref_losses[0] > ref_losses[-1])
     self.assertAllClose(custom_losses, ref_losses, rtol=0.05)
 
+  @test_util.deprecated_graph_mode_only
   def testTraining_resetAfter(self):
     np.random.seed(42)
     nums = np.arange(batch_size + seq_len)
