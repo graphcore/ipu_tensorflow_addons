@@ -1,4 +1,4 @@
-package(default_visibility = ["//visibility:private"])
+package(default_visibility = ["//ipu_tensorflow_addons/tools/pip_package:__pkg__"])
 
 py_library(
     name = "ipu_tensorflow_addons",
