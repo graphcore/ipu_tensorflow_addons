@@ -25,7 +25,7 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]
     print_usage_and_exit
 fi
 
-OUTPUT_DIRECTORY=$(realpath $(dirname $1))
+OUTPUT_DIRECTORY=$(realpath $1)
 if [ ! -d ${OUTPUT_DIRECTORY} ]; then
   echo "ERROR: Specified output directory could not be found: ${OUTPUT_DIRECTORY}"
   exit 1
