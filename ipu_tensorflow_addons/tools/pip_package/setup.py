@@ -16,6 +16,7 @@ def find_packages(pattern=".*"):
 setup(
   name='ipu_tensorflow_addons',
   version='0.0.0',
+  python_requires='>=3.6',
   url='https://www.graphcore.ai/',
   author='Graphcore Ltd.',
   # Contained modules and scripts.
