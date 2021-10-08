@@ -24,8 +24,8 @@ def _generate_sequences(seq_lens, max_len, dtype):
   return sequences
 
 
-def _generate_random_binary_mask(a, b):
-  mask = np.random.randint(2, size=(a, b))
+def _generate_ones_mask(a, b):
+  mask = np.ones(shape=(a, b))
   return mask.astype(np.bool)
 
 
@@ -71,7 +71,7 @@ TEST_CASES = [{
     'dtype': np.float32,
     'seq_per_iter': 2,
     'use_scale': True,
-    'q_mask': _generate_random_binary_mask(len(test_seq_lens), 4),
+    'q_mask': _generate_ones_mask(len(test_seq_lens), 4),
     'attention_heads': 4,
     'attention_head_size': 16
 }]
@@ -199,9 +199,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                     use_scale, q_mask, attention_heads, attention_head_size):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       # Generate some data.
       from_sequences = _generate_sequences(from_seq_lens, from_row_len, dtype)
@@ -249,9 +250,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                          attention_heads, attention_head_size):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       # Generate some data.
       from_sequences = _generate_sequences(from_seq_lens, from_row_len, dtype)
@@ -322,9 +324,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                    use_scale, q_mask, attention_heads, attention_head_size):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       # Generate some data.
       from_sequences = _generate_sequences(from_seq_lens, from_row_len, dtype)
@@ -380,9 +383,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                         attention_head_size):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       # Generate some data.
       from_sequences = _generate_sequences(from_seq_lens, from_row_len, dtype)
@@ -468,9 +472,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
       attention_head_size):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       transformer_kwargs = {
           'output_layer_size': output_layer_size,
@@ -498,9 +503,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                         sequence_lengths):
     strategy = ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      cfg = ipu.utils.create_ipu_config()
-      cfg = ipu.utils.auto_select_ipus(cfg, 1)
-      ipu.utils.configure_ipu_system(cfg)
+      cfg = ipu.config.IPUConfig()
+      cfg.ipu_model.compile_ipu_code = False
+      cfg.ipu_model.tiles_per_ipu = 128
+      cfg.configure_ipu_system()
 
       num_sequences = len(sequence_lengths)
 
