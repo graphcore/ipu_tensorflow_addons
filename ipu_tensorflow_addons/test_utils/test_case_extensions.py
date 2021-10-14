@@ -1,7 +1,6 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
 
 import fnmatch
-import numpy as np
 from tensorflow.python.framework.test_util import TensorFlowTestCase
 
 
