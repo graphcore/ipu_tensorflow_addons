@@ -1,5 +1,4 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
-
 """
 Popnn recurrent neural network operators
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -14,7 +13,6 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope as vs
-from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.ipu.ops import op_util
 
 POPNN_LSTM = "lstm"
@@ -124,6 +122,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     return self._canonical_bias_shape(0)
 
   def build(self, input_shape):
+    del input_shape
     raise ValueError("This method needs to be overridden.")
 
   def _build(self, input_shape):
@@ -139,7 +138,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     Raises:
       ValueError: if input_shape has wrong dimension or unknown 3rd dimension.
     """
-    if self.built:
+    if self.built:  # pylint: disable=access-member-before-definition
       return
 
     input_shape = tensor_shape.TensorShape(input_shape)
@@ -154,7 +153,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     self.input_spec = base_layer.InputSpec(ndim=3, axes={-1: self._input_size})
 
     # Create the variables
-    with vs.variable_scope(self._scope, reuse=self.built):
+    with vs.variable_scope(self._scope, reuse=self.built):  # pylint: disable=access-member-before-definition
       if self._weights_initializer is None:
         self._weights_initializer = init_ops.glorot_uniform_initializer(
             self._seed, dtype=self._plain_dtype)
@@ -360,6 +359,10 @@ class PopnnLSTM(_PopnnRNN):
       res.append(array_ops.zeros(sp, dtype=self.dtype))
     return rnn_cell.LSTMStateTuple(*res)
 
+  @property
+  def saveable(self):
+    return False
+
 
 class PopnnDynamicLSTM(PopnnLSTM):
   #pylint: disable=W0223
@@ -421,6 +424,10 @@ class PopnnDynamicLSTM(PopnnLSTM):
     state = rnn_cell.LSTMStateTuple(output_c, output_h)
 
     return outputs, state
+
+  @property
+  def saveable(self):
+    return False
 
 
 class PopnnGRU(_PopnnRNN):
@@ -571,6 +578,10 @@ class PopnnGRU(_PopnnRNN):
     if self._reset_after:
       return [self._num_gates_per_layer, 2, self._num_units]
     return super(PopnnGRU, self)._canonical_bias_shape(unused_layer)
+
+  @property
+  def saveable(self):
+    return False
 
 
 class PopnnDynamicGRU(PopnnGRU):
@@ -855,3 +866,7 @@ class PopnnAUGRU(PopnnGRU):
         name=self._name,
         reset_after=self._reset_after)
     return output, output_c
+
+  @property
+  def saveable(self):
+    return False

@@ -1,5 +1,4 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
-
 """
 TensorFlow layers made for IPU TensorFlow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

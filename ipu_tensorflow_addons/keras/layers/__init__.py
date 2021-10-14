@@ -1,5 +1,4 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
-
 """
 Keras layers made for IPU TensorFlow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

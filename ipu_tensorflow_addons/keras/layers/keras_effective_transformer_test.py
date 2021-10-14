@@ -1,5 +1,4 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
-
 """Test for IPU Keras Effective Transformer layers."""
 
 import numpy as np

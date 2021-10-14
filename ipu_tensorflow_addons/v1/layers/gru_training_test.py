@@ -1,14 +1,9 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 # Naive GRU to learn three-char time steps to one-char mapping
 
 import numpy as np
 from tensorflow.python import ipu
-from tensorflow.python.eager import def_function
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops

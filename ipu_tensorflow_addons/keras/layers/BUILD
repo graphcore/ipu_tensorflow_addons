@@ -11,8 +11,8 @@ py_library(
 py_test(
     name = "keras_effective_transformer_test",
     size = "large",
-    shard_count = 12,
     srcs = ["keras_effective_transformer_test.py"],
+    shard_count = 12,
     deps = [":layers"],
 )
 
