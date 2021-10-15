@@ -22,7 +22,10 @@ py_test(
     name = "gru_training_test",
     size = "large",
     srcs = ["gru_training_test.py"],
-    deps = [":layers"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
 )
 
 py_test(
@@ -39,7 +42,10 @@ py_test(
     name = "lstm_training_test",
     size = "large",
     srcs = ["lstm_training_test.py"],
-    deps = [":layers"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
 )
 
 test_suite(

@@ -20,37 +20,39 @@ import pva
 from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons import layers
 
-dataType = np.float16
+DATA_TYPE = np.float16
 
-batch_size = 1
-num_input = 28
-timesteps = 5
-num_hidden = 512
-
-
-def _PopnnGRU(x, initial_state):
-  gru_cell = layers.PopnnGRU(
-      num_hidden,
-      dtype=dataType,
-      weights_initializer=init_ops.zeros_initializer(dtype=dataType),
-      bias_initializer=init_ops.constant_initializer(2.0, dtype=dataType))
-  return gru_cell(x, initial_state=initial_state, training=False)
+BATCH_SIZE = 1
+INPUT_SIZE = 28
+TIME_STEPS = 5
+NUM_HIDDEN = 512
 
 
-def _tfGRU(x, initial_state):
-  gru_cell = rnn_cell.GRUCell(
-      num_hidden,
-      name='gru_cell',
-      kernel_initializer=init_ops.zeros_initializer(dtype=dataType),
-      bias_initializer=init_ops.constant_initializer(2.0, dtype=dataType))
-  return rnn.dynamic_rnn(gru_cell,
+def _PopnnLSTM(x, h, c):
+  lstm_cell = layers.PopnnLSTM(
+      NUM_HIDDEN,
+      dtype=DATA_TYPE,
+      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE))
+  state = rnn_cell.LSTMStateTuple(c, h)
+  return lstm_cell(x, initial_state=state, training=False)
+
+
+def _tfLSTM(x, h, c):
+  lstm_cell = rnn_cell.LSTMCell(
+      NUM_HIDDEN,
+      name='basic_lstm_cell',
+      forget_bias=0.,
+      initializer=init_ops.zeros_initializer(dtype=DATA_TYPE))
+  state = rnn_cell.LSTMStateTuple(c, h)
+  return rnn.dynamic_rnn(lstm_cell,
                          x,
-                         dtype=dataType,
-                         initial_state=initial_state,
+                         dtype=DATA_TYPE,
+                         initial_state=state,
                          time_major=True)
 
 
-class GRUSizeTest(test_util.TensorFlowTestCase):
+class LstmSizeTest(test_util.TensorFlowTestCase):
   def RunLayer(self, layer_func, x):
     cfg = ipu.utils.IPUConfig()
     report_helper = tu.ReportHelper()
@@ -60,17 +62,18 @@ class GRUSizeTest(test_util.TensorFlowTestCase):
 
     with self.session() as sess:
       with ops.device('cpu'):
-        px = array_ops.placeholder(dataType, shape=x.shape)
-        pinitial_state = array_ops.placeholder(dataType,
-                                               shape=[batch_size, num_hidden])
+        px = array_ops.placeholder(DATA_TYPE, shape=x.shape)
+        ph = array_ops.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
+        pc = array_ops.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
       with ipu.scopes.ipu_scope("/device:IPU:0"):
-        r = ipu.ipu_compiler.compile(layer_func, inputs=[px, pinitial_state])
+        r = ipu.ipu_compiler.compile(layer_func, inputs=[px, ph, pc])
 
       sess.run(variables.global_variables_initializer())
       report_helper.clear_reports()
       result = sess.run(r, {
           px: x,
-          pinitial_state: np.ones(pinitial_state.shape),
+          ph: np.ones(ph.shape),
+          pc: np.ones(pc.shape)
       })
 
     report = pva.openReport(report_helper.find_report())
@@ -84,11 +87,11 @@ class GRUSizeTest(test_util.TensorFlowTestCase):
   @test_util.deprecated_graph_mode_only
   def testCustomOpIsSmaller(self):
     np.random.seed(42)
-    x = np.random.rand(timesteps, batch_size, num_input).astype(dataType)
-    size_custom_op, result_custom_op = self.RunLayer(_PopnnGRU, x)
-    size_tf, result_tf = self.RunLayer(_tfGRU, x)
-    self.assertTrue(size_custom_op < size_tf)
+    x = np.random.rand(TIME_STEPS, BATCH_SIZE, INPUT_SIZE).astype(DATA_TYPE)
+    size_custom_op, result_custom_op = self.RunLayer(_PopnnLSTM, x)
+    size_tf, result_tf = self.RunLayer(_tfLSTM, x)
     self.assertAllClose(result_custom_op, result_tf)
+    self.assertTrue(size_custom_op < size_tf)
 
 
 if __name__ == "__main__":
