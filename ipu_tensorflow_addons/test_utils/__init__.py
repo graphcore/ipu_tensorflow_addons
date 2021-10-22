@@ -4,3 +4,11 @@
 import ipu_tensorflow_addons.test_utils.test_case_extensions
 
 from ipu_tensorflow_addons.test_utils.report_helper import ReportHelper
+
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import get_ci_num_ipus
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import has_ci_ipus
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import add_hw_ci_connection_options
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import test_may_use_ipus_or_model
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import test_uses_ipus
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import skip_on_hw
+from ipu_tensorflow_addons.test_utils.hardware_test_utils import skip_if_not_enough_ipus
