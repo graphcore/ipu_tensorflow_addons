@@ -5,23 +5,28 @@ DIR=$(realpath $(dirname $0))
 
 print_usage_and_exit() {
   cat <<EOM
-Usage: $0 --output-directory [--help|-h]
+Usage: $0 output-directory tf-version [--help|-h]
 
   output-directory
       The directory to place the wheel file in. The current working directory is used by default.
+  tf-version
+      The TensorFlow version the wheel is being built for (optional).
   -h, --help
       Print this help message.
 EOM
   exit 1
 }
 
-if [ -z "$1" ]
+# Check for -h or --help
+if echo $@ | grep -w -- "-h\|--help" > /dev/null
   then
-    echo "ERROR: The output-directory argument must be specified."
-    exit 1
+    print_usage_and_exit
 fi
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+
+# Check argument count
+if [ $# -ne 2 ] && [ $# -ne 1 ]
   then
+    echo "ERROR: Incorrect number of arguments"
     print_usage_and_exit
 fi
 
@@ -32,17 +37,14 @@ if [ ! -d ${OUTPUT_DIRECTORY} ]; then
 fi
 shift
 
-while [[ $# -gt 1 ]]; do
-  case "$1" in
-  -h | --help)
-    print_usage_and_exit
-    ;;
-  *)
-    echo "ERROR: Unrecognised argument $1"
-    exit 1
-    ;;
-  esac
-done
+# TF_VERSION is required by setup.py
+if [ $# -gt 0 ]
+  then
+    export TF_VERSION=$1
+    shift
+else
+  export TF_VERSION="1.15.5"
+fi
 
 cleanup_temp_dir() {
   cd "${DIR}"
