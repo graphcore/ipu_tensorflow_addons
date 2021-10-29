@@ -126,8 +126,6 @@ def get_one_hot(a, num_classes):
 class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
   def _configure_ipu(self):
     opts = IPUConfig()
-    opts._profiling.enable_ipu_events = True  # pylint: disable=protected-access
-    opts._profiling.use_poplar_text_report = True  # pylint: disable=protected-access
     opts.ipu_model.compile_ipu_code = False
     opts.configure_ipu_system()
 
