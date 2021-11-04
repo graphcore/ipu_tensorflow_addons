@@ -1,6 +1,6 @@
 IPU TensorFlow Addons
 =====================
 
-.. include:: intro
-.. include:: api-changes
-.. include:: api
+.. include:: intro.rst
+.. include:: api-changes.rst
+.. include:: api.rst
