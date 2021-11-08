@@ -1,9 +1,5 @@
-.. _api-section:
-
-Python API
-----------
-
-.. _keras-layers-api:
+IPU TensorFlow Addons Python API
+================================
 
 TensorFlow Layers
 ^^^^^^^^^^^^^^^^^
