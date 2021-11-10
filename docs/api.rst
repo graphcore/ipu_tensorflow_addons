@@ -1,5 +1,5 @@
 IPU TensorFlow Addons Python API
-================================
+--------------------------------
 
 TensorFlow Layers
 ^^^^^^^^^^^^^^^^^
