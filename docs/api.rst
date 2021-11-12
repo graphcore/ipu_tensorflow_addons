@@ -18,6 +18,7 @@ Keras Optimizers
   :members:
   :special-members: __init__
   :imported-members:
+  :exclude-members: IpuOptimizerBase
 
 Legacy TensorFlow Layers
 ^^^^^^^^^^^^^^^^^^^^^^^^
