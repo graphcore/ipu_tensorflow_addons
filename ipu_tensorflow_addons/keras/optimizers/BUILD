@@ -7,6 +7,7 @@ py_library(
         "adam_optimizer.py",
         "ipu_optimizer_base.py",
         "lamb_optimizer.py",
+        "sgd_optimizer.py",
     ],
 )
 
@@ -32,10 +33,22 @@ py_test(
     deps = [":optimizers"],
 )
 
+py_test(
+    name = "keras_sgd_optimizer_test",
+    size = "medium",
+    srcs = [
+        "keras_sgd_optimizer_test.py",
+        "test_util.py",
+    ],
+    shard_count = 3,
+    deps = [":optimizers"],
+)
+
 test_suite(
     name = "all_tests",
     tests = [
         "keras_adam_optimizer_test",
         "keras_lamb_optimizer_test",
+        "keras_sgd_optimizer_test",
     ],
 )
