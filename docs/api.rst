@@ -1,7 +1,7 @@
 IPU TensorFlow Addons Python API
 --------------------------------
 
-TensorFlow Layers
+TensorFlow layers
 ^^^^^^^^^^^^^^^^^
 
 .. automodule:: ipu_tensorflow_addons.layers
@@ -9,10 +9,18 @@ TensorFlow Layers
   :special-members: __init__
   :imported-members:
 
-TensorFlow Optimizers
+TensorFlow optimizers
 ^^^^^^^^^^^^^^^^^^^^^
 
 .. automodule:: ipu_tensorflow_addons.optimizers
+  :members:
+  :special-members: __init__
+  :imported-members:
+
+TensorFlow saved model tool
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: ipu_tensorflow_addons.saved_model_tool
   :members:
   :special-members: __init__
   :imported-members:

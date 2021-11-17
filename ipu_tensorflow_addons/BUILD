@@ -5,6 +5,7 @@ py_library(
     deps = [
         "//ipu_tensorflow_addons/layers",
         "//ipu_tensorflow_addons/optimizers",
+        "//ipu_tensorflow_addons/saved_model_tool",
     ],
 )
 
@@ -13,5 +14,6 @@ test_suite(
     tests = [
         "//ipu_tensorflow_addons/layers:all_tests",
         "//ipu_tensorflow_addons/optimizers:all_tests",
+        "//ipu_tensorflow_addons/saved_model_tool:all_tests",
     ],
 )
