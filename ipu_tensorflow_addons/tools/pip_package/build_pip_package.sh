@@ -10,7 +10,7 @@ Usage: $0 output-directory tf-version [--help|-h]
   output-directory
       The directory to place the wheel file in. The current working directory is used by default.
   tf-version
-      The TensorFlow version the wheel is being built for (optional).
+      The TensorFlow version the wheel is being built for.
   -h, --help
       Print this help message.
 EOM
