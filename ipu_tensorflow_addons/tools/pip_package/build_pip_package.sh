@@ -24,7 +24,7 @@ if echo $@ | grep -w -- "-h\|--help" > /dev/null
 fi
 
 # Check argument count
-if [ $# -ne 2 ] && [ $# -ne 1 ]
+if [ $# -ne 2 ]
   then
     echo "ERROR: Incorrect number of arguments"
     print_usage_and_exit
@@ -37,14 +37,8 @@ if [ ! -d ${OUTPUT_DIRECTORY} ]; then
 fi
 shift
 
-# TF_VERSION is required by setup.py
-if [ $# -gt 0 ]
-  then
-    export TF_VERSION=$1
-    shift
-else
-  export TF_VERSION="1.15.5"
-fi
+export TF_VERSION=$1
+shift
 
 cleanup_temp_dir() {
   cd "${DIR}"
