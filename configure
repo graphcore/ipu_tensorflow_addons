@@ -3,13 +3,14 @@
 set -e # Stop on error
 
 DEFAULT_VENV_PATH="./venv"
+USER_BAZELRC=true
 
 DIR=$(realpath $(dirname $0))
 cd $DIR
 
 print_usage_and_exit() {
   cat <<EOM
-Usage: $0 TENSORFLOW-WHEEL-PATH [--help|-h] [--venv-path VENV-PATH] [--environment-variables VARIABLES] [--disk-cache|-c CACHE-FOLDER]
+Usage: $0 TENSORFLOW-WHEEL-PATH [--help|-h] [--venv-path VENV-PATH] [--no-user-bazelrc] [--environment-variables VARIABLES] [--disk-cache|-c CACHE-FOLDER]
 
   TENSORFLOW-WHEEL-PATH
       The path to the IPU TensorFlow .whl file you want to build IPU TensorFlow Addons for.
@@ -19,6 +20,9 @@ Usage: $0 TENSORFLOW-WHEEL-PATH [--help|-h] [--venv-path VENV-PATH] [--environme
       Choose the location of the Python virtual environment.
       If a virtual environment already exists at the specified path, it will be reused.
       The default is $DEFAULT_VENV_PATH.
+  --no-user-bazelrc
+      Do not touch .bazelrc.user
+      Important: This means the environment will not be frozen.
   --environment-variables VARIABLES
       Comma separated list of environment variables to forward to Bazel.
   -c, --disk-cache CACHE-FOLDER
@@ -38,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       echo "ERROR: invalid ---venv-path argument: path cannot start with a '-': ${VENV_PATH}"
       exit 1
     fi
+    shift
+    ;;
+  --no-user-bazelrc)
+    USER_BAZELRC=false
     shift
     ;;
   --environment-variables)
@@ -167,50 +175,37 @@ pip install --upgrade setuptools wheel
 pip install --force-reinstall ${TENSORFLOW_WHEEL_PATH}
 
 # Create user config.
-
-tmp_backup=$(mktemp)
-# Backup current user config if it exists.
-if [ -f ".bazelrc.user" ]; then
-  mv .bazelrc.user $tmp_backup
-fi
-
-# Paths pointing to venv, Poplar, and TensorFlow.
-echo "build --test_env=PATH=${PATH}" >>.bazelrc.user
-echo "build --test_env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >>.bazelrc.user
-echo "build --test_env=PYTHONPATH=${PYTHONPATH}" >>.bazelrc.user
-
-if [ -n "${TMPDIR+set}" ]; then
-  echo "build --action_env=TMPDIR=${TMPDIR}" >>.bazelrc.user
-fi
-if [ -n "${ENV_VARS+set}" ]; then
-  for v in $(echo $ENV_VARS | tr "," "\n"); do
-    echo "build --action_env=$v=${!v}" >>.bazelrc.user
-  done
-fi
-
-if [ -n "${BAZEL_CACHE_DIR+set}" ]; then
-  echo "build --disk_cache=${BAZEL_CACHE_DIR}" >>.bazelrc.user
-fi
-
-if [ -n "${GCCI_OS_VERSION+set}" ]; then
-  if [ -n "${GCCI_BAZEL_REMOTE_CACHE+set}" ]; then
-    if [ "${GCCI_DIFF_BUILD}" == "true" ]; then
-      DIFF_FLAG="-diff"
-    fi
-
-    BAZEL_REMOTE_CACHE="${GCCI_BAZEL_REMOTE_CACHE}/${OS_DISTRO}-${GCCI_OS_VERSION}-${TF_CONFIG}-${CACHE_ARCH}${DIFF_FLAG}-ipu_tensorflow_addons"
-    echo "Using bazel cache ${BAZEL_REMOTE_CACHE}"
-    echo "build --remote_cache=${BAZEL_REMOTE_CACHE} --remote_upload_local_results=true" >>.bazelrc.user
+if [ "$USER_BAZELRC" = true ]; then
+  tmp_backup=$(mktemp)
+  # Backup current user config if it exists.
+  if [ -f ".bazelrc.user" ]; then
+    mv .bazelrc.user $tmp_backup
   fi
-else
-  echo "Skipping bazel cache: GCCI_OS_VERSION not set."
-fi
 
-# Restore the user defined options.
-separation="### ADD USER DEFINED OPTIONS AFTER THIS LINE ONLY ###"
-echo $separation >>.bazelrc.user
-if [ -f "$tmp_backup" ]; then
-  sed "0,/$separation/d" $tmp_backup >>.bazelrc.user
-  rm $tmp_backup
+  # Paths pointing to venv, Poplar, and TensorFlow.
+  echo "build --test_env=PATH=${PATH}" >>.bazelrc.user
+  echo "build --test_env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >>.bazelrc.user
+  echo "build --test_env=PYTHONPATH=${PYTHONPATH}" >>.bazelrc.user
+
+  if [ -n "${TMPDIR+set}" ]; then
+    echo "build --action_env=TMPDIR=${TMPDIR}" >>.bazelrc.user
+  fi
+  if [ -n "${ENV_VARS+set}" ]; then
+    for v in $(echo $ENV_VARS | tr "," "\n"); do
+      echo "build --action_env=$v=${!v}" >>.bazelrc.user
+    done
+  fi
+
+  if [ -n "${BAZEL_CACHE_DIR+set}" ]; then
+    echo "build --disk_cache=${BAZEL_CACHE_DIR}" >>.bazelrc.user
+  fi
+
+  # Restore the user defined options.
+  separation="### ADD USER DEFINED OPTIONS AFTER THIS LINE ONLY ###"
+  echo $separation >>.bazelrc.user
+  if [ -f "$tmp_backup" ]; then
+    sed "0,/$separation/d" $tmp_backup >>.bazelrc.user
+    rm $tmp_backup
+  fi
+  echo "Successfully created .bazelrc.user"
 fi
-echo "Successfully created .bazelrc.user"
