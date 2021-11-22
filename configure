@@ -37,6 +37,7 @@ POSITIONAL_ARGS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --venv-path)
+    shift
     VENV_PATH=$1
     if [[ ${VENV_PATH:0:1} == "-" ]]; then
       echo "ERROR: invalid ---venv-path argument: path cannot start with a '-': ${VENV_PATH}"
