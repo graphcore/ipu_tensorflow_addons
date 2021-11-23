@@ -4,21 +4,87 @@ py_library(
     name = "layers",
     srcs = [
         "__init__.py",
+        "assume_equal_across_replicas.py",
+        "ctc.py",
+        "dense.py",
+        "dropout.py",
         "effective_transformer.py",
+        "embedding_lookup.py",
+        "ipu_layer.py",
+        "normalization.py",
+        "recomputation.py",
+        "rnn.py",
     ],
 )
 
 py_test(
-    name = "keras_effective_transformer_test",
+    name = "assume_equal_across_replicas_test",
     size = "large",
-    srcs = ["keras_effective_transformer_test.py"],
+    srcs = ["assume_equal_across_replicas_test.py"],
+    tags = ["hw_poplar_test"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
+)
+
+py_test(
+    name = "ctc_test",
+    size = "large",
+    srcs = ["ctc_test.py"],
+    deps = [":layers"],
+)
+
+py_test(
+    name = "dense_test",
+    size = "large",
+    srcs = ["dense_test.py"],
     shard_count = 12,
     deps = [":layers"],
 )
 
+py_test(
+    name = "dropout_test",
+    size = "medium",
+    srcs = ["dropout_test.py"],
+    deps = [":layers"],
+)
+
+py_test(
+    name = "effective_transformer_test",
+    size = "large",
+    srcs = ["effective_transformer_test.py"],
+    shard_count = 12,
+    deps = [":layers"],
+)
+
+py_test(
+    name = "embedding_lookup_test",
+    size = "large",
+    srcs = ["embedding_lookup_test.py"],
+    deps = [":layers"],
+)
+
+py_test(
+    name = "normalization_test",
+    size = "large",
+    srcs = ["normalization_test.py"],
+    shard_count = 12,
+    deps = [":layers"],
+)
+
+py_test(
+    name = "recomputation_test",
+    size = "large",
+    srcs = ["recomputation_test.py"],
+    shard_count = 2,
+    tags = ["isolated_poplar_tests"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
+)
+
 test_suite(
     name = "all_tests",
-    tests = [
-        "keras_effective_transformer_test",
-    ],
 )

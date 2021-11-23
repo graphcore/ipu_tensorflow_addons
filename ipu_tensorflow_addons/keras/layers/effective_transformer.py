@@ -1,7 +1,7 @@
 # Copyright (c) 2021 Graphcore Ltd. All rights reserved.
 """
-Keras EffectiveTransformer layer
-~~~~~~~~~~~~~~~~~~~
+EffectiveTransformer Keras layer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
 from tensorflow.python.framework import dtypes

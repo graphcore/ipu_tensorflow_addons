@@ -86,14 +86,14 @@ You can specify a different bazel test target to run a more specific set of test
 
 ```
 lang=sh
-bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --use_ipu_model --max_compilation_threads=1 --ipu_model_tiles=8" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="240,360,900,3600" --test_output=errors //ipu_tensorflow_addons/keras/layers:keras_effective_transformer_test
+bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --use_ipu_model --max_compilation_threads=1 --ipu_model_tiles=8" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="240,360,900,3600" --test_output=errors //ipu_tensorflow_addons/keras/layers:effective_transformer_test
 ```
 
 You can also run a single test by specifying `--test_arg`.
 
 ```
 lang=sh
-bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --use_ipu_model --max_compilation_threads=1 --ipu_model_tiles=8" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="240,360,900,3600" --test_output=errors //ipu_tensorflow_addons/keras/layers:keras_effective_transformer_test --test_arg IPUEffectiveTransformerLayerTest.testMismatchedSequenceLen
+bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --use_ipu_model --max_compilation_threads=1 --ipu_model_tiles=8" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="240,360,900,3600" --test_output=errors //ipu_tensorflow_addons/keras/layers:effective_transformer_test --test_arg IPUEffectiveTransformerLayerTest.testMismatchedSequenceLen
 ```
 
 ### Running HW tests
