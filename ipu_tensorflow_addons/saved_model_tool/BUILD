@@ -9,12 +9,21 @@ py_library(
         "converter/converter_pipeline.py",
         "converter/ipu_placement.py",
         "ipu_convert.py",
+        "saved_model_cli.py",
     ],
 )
 
 py_test(
     name = "ipu_placement_test",
     srcs = ["converter/ipu_placement_test.py"],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
+    name = "saved_model_cli_test",
+    srcs = ["saved_model_cli_test.py"],
     deps = [
         ":saved_model_tool",
     ],

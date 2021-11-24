@@ -270,14 +270,6 @@ class IpuGraphConverter(object):
     self._conversion_params.pb_md5sum = resp[0].split(" ")[0]
     self._conversion_params.save_to_json_file(output_saved_model_dir)
 
-    # Save ipu_cfg.bin to output_saved_model_dir
-    cfg = ipu.utils.create_ipu_config()
-    cfg = ipu.utils.auto_select_ipus(cfg, self._conversion_params.num_ipus)
-    ipu_cfg_path = os.path.join(output_saved_model_dir, 'ipu_cfg.bin')
-    with open(ipu_cfg_path, 'wb') as f:
-      f.write(cfg.SerializeToString())
-    print("Save ipu config information to {}".format(ipu_cfg_path))
-
 
 def create_inference_graph(input_saved_model_dir=None,
                            input_saved_model_tags=None,

@@ -37,6 +37,12 @@ if "TF_VERSION" not in os.environ:
       "version the wheel is being built.")
 tf_version = os.environ["TF_VERSION"]
 
+# pylint: disable=line-too-long
+CONSOLE_SCRIPTS = [
+    'ipu_saved_model_cli = ipu_tensorflow_addons.saved_model_tool.saved_model_cli:main',
+]
+# pylint: enable=line-too-long
+
 setup(
     name='ipu_tensorflow_addons',
     description='A collection of addons for IPU TensorFlow',
@@ -48,4 +54,7 @@ setup(
     packages=find_packages(r"ipu_tensorflow_addons\.?.*"),
     license='Apache 2.0',
     install_requires=[f"tensorflow=={tf_version}"],
+    entry_points={
+        'console_scripts': CONSOLE_SCRIPTS,
+    },
 )
