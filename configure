@@ -150,14 +150,7 @@ else
   # Set up an independent python virtualenv.
   USE_VIRTUALENV=1
   rm -rf ${VE}
-  set +e # Disable stop on error.
-  ${PYTHON_BIN_PATH} -m venv ${VE} --no-pip &>/dev/null
-  USE_VIRTUALENV=$? # Returns 0 if venv is available, 1 otherwise.
-  set -e            # Restore stop on error.
-  if [ "$USE_VIRTUALENV" -ne "0" ]; then
-    rm -rf ${VE}
-    virtualenv -p ${PYTHON_BIN_PATH} ${VE}
-  fi
+  ${PYTHON_BIN_PATH} -m venv ${VE} --without-pip
 fi
 
 # Activate the venv.
