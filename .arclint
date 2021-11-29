@@ -30,6 +30,9 @@
             "gc-copyright.script_path": "../../../../scripts/ipu_tensorflow_addons/check_copyright.py",
             "include": [
                  "(.*)"
+            ],
+            "exclude": [
+                 "(^docs/.*\\.py$)"
             ]
         }
     }

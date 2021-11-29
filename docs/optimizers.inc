@@ -1,5 +1,5 @@
 Optimizers
-------------
+~~~~~~~~~~
 
 The optimizers contained in the IPU TensorFlow add-ons are drop in
 replacements to TensorFlow optimizers. They are functionally the same but have
