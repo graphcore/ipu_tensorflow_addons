@@ -109,3 +109,11 @@ that a single test can use.
 `--test_tag_filters=hw_poplar_test` tells bazel to only run tests tagged as hw tests.
 
 Note that `--use_ipu_model` and `--ipu_model_tiles` have been omitted from `--test_env=TF_POPLAR_FLAGS`.
+
+## Licensing
+
+Copyright (c) 2021 Graphcore Ltd. All Rights Reserved.
+
+The code in this repository is licensed under the Apache License 2.0, see the [LICENSE.txt](LICENSE.txt) file in this directory.
+
+It contains derived work, see the [LICENSE-3RD-PARTY.txt](LICENSE-3RD-PARTY.txt) file in this directory and the headers in the source code.
