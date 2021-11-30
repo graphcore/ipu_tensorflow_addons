@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 """
-A collection of addons for IPU Tensorflow
+A collection of addons for IPU TensorFlow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
