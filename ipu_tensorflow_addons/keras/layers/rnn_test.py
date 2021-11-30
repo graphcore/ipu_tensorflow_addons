@@ -18,19 +18,20 @@
 """Tests for IPU LSTM layers."""
 
 import numpy as np
-
 from tensorflow.python import ipu
 from tensorflow.python import keras
-from tensorflow.python.keras.layers import recurrent_v2
+from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.eager import def_function
+from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.platform import test
+from tensorflow.python.keras.layers import recurrent_v2
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variables
+from tensorflow.python.platform import test
 
 from ipu_tensorflow_addons.keras import layers
 
@@ -40,6 +41,17 @@ num_input = 3
 timesteps = 4
 num_hidden = 5
 data_type = np.float32
+
+
+def test_language_dataset(length=None):
+  constant_d = constant_op.constant(1, shape=[32], dtype=np.int32)
+  constant_l = constant_op.constant(2, shape=[32], dtype=np.int32)
+
+  ds = dataset_ops.Dataset.from_tensors((constant_d, constant_l))
+  ds = ds.repeat(length)
+  ds = ds.batch(batch_size, drop_remainder=True)
+
+  return ds
 
 
 def _getLSTMLayer(keras_layer=None,
@@ -136,6 +148,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     cpu_result = _lstmCPU(self, x, h, c)
@@ -144,6 +162,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_time_major(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs(time_major=True)
 
     cpu_result = _lstmCPU(self, x, h, c, time_major=True)
@@ -152,6 +176,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_unit_forget_bias(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     cpu_result = _lstmCPU(self, x, h, c, unit_forget_bias=True)
@@ -160,6 +190,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_all_seq(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     ipu_result = _lstmIPU(self, x, h, c, return_sequences=True)
@@ -171,6 +207,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_no_state(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     ipu_result = _lstmIPU(self, x, h, c, return_state=False)
@@ -183,6 +225,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_dropout(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     dropout_none_result = _lstmIPU(self,
@@ -202,6 +250,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_can_call_without_state_change(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs()
 
     layer = layers.PopnnLSTM(
@@ -226,6 +280,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_stateful(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs(num_samples=10)
 
     cpu_result = _lstmCPU(self, x, h, c, stateful=True)
@@ -234,6 +294,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_lstm_stateful_time_major(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, h, c = self._get_random_inputs(time_major=True, num_samples=10)
 
     cpu_result = _lstmCPU(self, x, h, c, stateful=True, time_major=True)
@@ -242,6 +308,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_lstm_save_load_weights(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     xs, _, _ = self._get_random_inputs()
     x = xs[0]
     # Run on CPU
@@ -261,6 +333,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_weight_type(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     layer_ipu = layers.PopnnLSTM(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
     self.assertTrue(all(w.dtype == dtypes.float32 for w in layer_ipu.weights))
@@ -277,6 +355,12 @@ class IpuLstmTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_upstream_layer(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     # Prepare Data
     xs, h, c = self._get_random_inputs(num_samples=2)
     x_fit, x_predict = xs[0], xs[1]
@@ -337,6 +421,62 @@ class IpuLstmTest(test.TestCase):
     config = layer.get_config()
     layer2 = layers.PopnnLSTM.from_config(config)
     self.assertEqual(config, layer2.get_config())
+
+  @test_util.run_v2_only
+  def testTrainPipelineWithLstm(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.auto_select_ipus = 2
+    cfg.configure_ipu_system()
+
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
+    with strategy.scope():
+      input_layer = keras.layers.Input(shape=(32),
+                                       dtype=dtypes.int32,
+                                       batch_size=batch_size)
+
+      with ipu.keras.PipelineStage(0):
+        x = layers.Embedding(8000, 128)(input_layer)
+
+      with ipu.keras.PipelineStage(1):
+        x = layers.PopnnLSTM(128, dropout=0.2)(x)
+        x = keras.layers.Dense(1, activation='sigmoid')(x)
+
+      m = keras.Model(input_layer, x)
+      m.set_pipelining_options(gradient_accumulation_steps_per_replica=24)
+      m.compile('sgd', loss='mse', steps_per_execution=48)
+
+      # Fit the weights to the dataset
+      history = m.fit(test_language_dataset(length=96), epochs=3, verbose=0)
+
+      losses = history.history['loss']
+      self.assertTrue(losses[0] > losses[-1])
+
+  @test_util.run_v2_only
+  def testTrainSequentialPipelineWithLstm(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.auto_select_ipus = 2
+    cfg.configure_ipu_system()
+
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
+    with strategy.scope():
+      m = keras.Sequential([
+          layers.Embedding(8000, 128),
+          layers.PopnnLSTM(128, dropout=0.2),
+          keras.layers.Dense(1, activation='sigmoid')
+      ])
+      m.set_pipeline_stage_assignment([0, 1, 1])
+      m.set_pipelining_options(gradient_accumulation_steps_per_replica=8)
+      m.compile('sgd', loss='mse', steps_per_execution=16)
+
+      # Fit the weights to the dataset
+      history = m.fit(test_language_dataset(length=96), epochs=3, verbose=0)
+
+      losses = history.history['loss']
+      self.assertTrue(losses[0] > losses[-1])
 
 
 def _getGRULayer(keras_layer=None,
@@ -429,6 +569,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs()
 
     cpu_result = _gruCPU(self, x, init)
@@ -437,6 +583,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_seq_major(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs(True)
 
     ipu_result = _gruIPU(self, x, init, time_major=True)
@@ -445,6 +597,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_all_seq(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs()
 
     ipu_result = _gruIPU(self, x, init, return_sequences=True)
@@ -456,6 +614,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_no_state(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs()
 
     ipu_result = _gruIPU(self, x, init, return_state=False)
@@ -468,6 +632,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_dropout(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs()
 
     dropout_none_result = _gruIPU(self,
@@ -487,6 +657,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_stateful(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs(num_samples=10)
 
     cpu_result = _gruCPU(self, x, init, stateful=True)
@@ -495,6 +671,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_stateful_time_major(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs(time_major=True, num_samples=10)
 
     cpu_result = _gruCPU(self, x, init, stateful=True, time_major=True)
@@ -503,6 +685,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.deprecated_graph_mode_only
   def test_gru_reset_after(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     x, init = self._get_random_inputs(num_samples=10)
 
     cpu_result = _gruCPU(self, x, init, reset_after=True)
@@ -511,6 +699,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_gru_save_load_weights(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     xs, _ = self._get_random_inputs()
     x = xs[0]
 
@@ -531,6 +725,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_upstream_layer(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     # Prepare Data
     xs, init = self._get_random_inputs(num_samples=2)
     x_fit, x_predict = xs[0], xs[1]
@@ -586,6 +786,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_weight_type(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     layer_ipu = layers.PopnnGRU(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
     self.assertTrue(all(w.dtype == dtypes.float32 for w in layer_ipu.weights))
@@ -602,6 +808,12 @@ class IpuGruTest(test.TestCase):
 
   @test_util.run_v2_only
   def test_gru_ipu_vs_cpu_results_reset_after(self):
+    # Configure
+    cfg = ipu.config.IPUConfig()
+    cfg.ipu_model.compile_ipu_code = False
+    cfg.ipu_model.tiles_per_ipu = 8
+    cfg.configure_ipu_system()
+
     # Prepare Data
     xs, init = self._get_random_inputs(num_samples=2)
     x_fit, x_predict = xs[0], xs[1]

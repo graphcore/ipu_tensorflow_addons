@@ -85,6 +85,25 @@ py_test(
     ],
 )
 
+py_test(
+    name = "rnn_test",
+    size = "large",
+    srcs = ["rnn_test.py"],
+    shard_count = 5,
+    deps = [":layers"],
+)
+
+py_test(
+    name = "rnn_hw_test",
+    size = "large",
+    srcs = ["rnn_hw_test.py"],
+    tags = ["hw_poplar_test"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
+)
+
 test_suite(
     name = "all_tests",
 )
