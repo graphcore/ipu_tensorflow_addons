@@ -17,10 +17,3 @@ TensorFlow optimizers
   :special-members: __init__
   :imported-members:
 
-TensorFlow saved model tool
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. automodule:: ipu_tensorflow_addons.saved_model_tool
-  :members:
-  :special-members: __init__
-  :imported-members:
