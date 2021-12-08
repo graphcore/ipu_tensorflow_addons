@@ -101,12 +101,11 @@ To run hardware tests, you need to pass a different set of arguments to bazel te
 
 ```
 lang=sh
-bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --max_compilation_threads=1" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="1200,1200,1200,1200" --test_output=errors --test_tag_filters=hw_poplar_test --jobs N --test_env="TF_IPU_COUNT=N" //ipu_tensorflow_addons:all_tests
+bazel test --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --max_compilation_threads=1" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="1200,1200,1200,1200" --test_output=errors --test_tag_filters=hw_poplar_test_{A}_ipus --test_env="TF_IPU_COUNT={B}" --jobs {C} //ipu_tensorflow_addons:all_tests
 ```
-The `N` in `--jobs N` and `--test_env="TF_IPU_COUNT=N"` specifies the number of IPUs in the system
-that a single test can use.
-
-`--test_tag_filters=hw_poplar_test` tells bazel to only run tests tagged as hw tests.
+The `{A}` in `--test_tag_filters=hw_poplar_test_{A}_ipus` specifies which set of tests to run, the valid values are 1, 2, 4, 8 and 16.
+The `{B}` in `--test_env="TF_IPU_COUNT={B}"` specifies how many IPUs there are in total in the system.
+The `{C}` in `--jobs {C}` specifies how many parallel tests to run. This value should be set to `B / A`.
 
 Note that `--use_ipu_model` and `--ipu_model_tiles` have been omitted from `--test_env=TF_POPLAR_FLAGS`.
 
