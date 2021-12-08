@@ -21,7 +21,7 @@ py_test(
     name = "assume_equal_across_replicas_test",
     size = "large",
     srcs = ["assume_equal_across_replicas_test.py"],
-    tags = ["hw_poplar_test"],
+    tags = ["hw_poplar_test_2_ipus"],
     deps = [
         ":layers",
         "//ipu_tensorflow_addons/test_utils",
@@ -97,7 +97,7 @@ py_test(
     name = "rnn_hw_test",
     size = "large",
     srcs = ["rnn_hw_test.py"],
-    tags = ["hw_poplar_test"],
+    tags = ["hw_poplar_test_1_ipus"],
     deps = [
         ":layers",
         "//ipu_tensorflow_addons/test_utils",
