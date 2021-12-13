@@ -67,7 +67,10 @@ def convert_with_ipu(args):
       excluded_nodes=args.excluded_nodes,
       num_ipus=args.num_ipus,
       ipu_placement=not bool(args.no_ipu_placement),
+      precision_conversion_excluded_nodes=(
+          args.precision_conversion_excluded_nodes),
       config_file=args.config_file,
+      precision_mode=args.precision_mode,
   )
 
 
@@ -117,13 +120,26 @@ def create_parser():
                                        type=int,
                                        default=1,
                                        help='Number ipus')
+  parser_convert_with_ipu.add_argument('--precision_mode',
+                                       type=str,
+                                       default=None,
+                                       action='store',
+                                       help='the precision of output model')
   parser_convert_with_ipu.add_argument(
       '--no_ipu_placement',
       action='store_true',
       help='if set, will not do ipu placement')
+  parser_convert_with_ipu.add_argument(
+      '--precision_conversion_excluded_nodes',
+      type=str,
+      nargs='+',
+      default=[],
+      help='ops that will not have their precision changed by --precision_mode'
+  )
   parser_convert_with_ipu.add_argument('--config_file',
                                        type=str,
                                        default=None,
+                                       action="store",
                                        help='config file path (json format).')
   parser_convert_with_ipu.set_defaults(func=convert_with_ipu)
 

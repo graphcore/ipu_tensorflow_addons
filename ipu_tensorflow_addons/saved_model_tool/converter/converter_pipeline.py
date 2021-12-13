@@ -16,13 +16,15 @@
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
 from ipu_tensorflow_addons.saved_model_tool.converter import IPUPlacement
+from ipu_tensorflow_addons.saved_model_tool.converter import PrecisionConversion
 
 
-class ConverterPipeline(object):
+class ConverterPipeline():
   # pylint: disable=unused-argument
   def __init__(self, param, signatrue_key):
     self._converters = list()
     self._converters.append(IPUPlacement(param))
+    self._converters.append(PrecisionConversion(param))
 
   def ApplyConverters(self, graph_def, signature_def):
     for converter in self._converters:

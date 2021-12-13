@@ -8,6 +8,8 @@ py_library(
         "converter/converter.py",
         "converter/converter_pipeline.py",
         "converter/ipu_placement.py",
+        "converter/precision_conversion.py",
+        "converter/utils.py",
         "ipu_convert.py",
         "saved_model_cli.py",
     ],
@@ -16,6 +18,16 @@ py_library(
 py_test(
     name = "ipu_placement_test",
     srcs = ["converter/ipu_placement_test.py"],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
+    name = "precision_conversion_test",
+    srcs = [
+        "converter/precision_conversion_test.py",
+    ],
     deps = [
         ":saved_model_tool",
     ],

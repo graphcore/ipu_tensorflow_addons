@@ -53,11 +53,19 @@ class IpuConversionParams(object):
   """
 
   # pylint:enable=line-too-long
-  def __init__(self, excluded_nodes=None, num_ipus=1, ipu_placement=True):
+  def __init__(self,
+               excluded_nodes=None,
+               num_ipus=1,
+               ipu_placement=True,
+               precision_mode=None,
+               precision_conversion_excluded_nodes=None):
     self.excluded_nodes = excluded_nodes
     self.num_ipus = num_ipus
     self.ipu_placement = ipu_placement
     self.pb_md5sum = None
+    self.precision_mode = precision_mode
+    self.precision_conversion_excluded_nodes = (
+        precision_conversion_excluded_nodes)
 
   def load_from_json_file(self, config_file):
     if not os.access(config_file, os.R_OK):
@@ -74,6 +82,13 @@ class IpuConversionParams(object):
     if "excluded_nodes" in config and isinstance(config["excluded_nodes"],
                                                  list):
       self.excluded_nodes = config["excluded_nodes"]
+    if "precision_mode" in config and isinstance(config["precision_mode"],
+                                                 str):
+      self.precision_mode = config["precision_mode"]
+    if "precision_conversion_excluded_nodes" in config and isinstance(
+        config["precision_conversion_excluded_nodes"], list):
+      self.precision_conversion_excluded_nodes = config[
+          "precision_conversion_excluded_nodes"]
 
   def save_to_json_file(self, directory):
     if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
@@ -83,8 +98,12 @@ class IpuConversionParams(object):
     config = {}
     config["num_ipus"] = self.num_ipus
     config["no_ipu_placement"] = True if self.ipu_placement is False else False
+    if self.precision_mode:
+      config["precision_mode"] = self.precision_mode
     config["md5sum"] = self.pb_md5sum
     config["excluded_nodes"] = self.excluded_nodes
+    config["precision_conversion_excluded_nodes"] = (
+        self.precision_conversion_excluded_nodes)
 
     config_file_path = os.path.join(directory, 'conversion_params.json')
     with open(config_file_path, 'w') as fp:
@@ -281,6 +300,8 @@ def create_inference_graph(input_saved_model_dir=None,
                            excluded_nodes=None,
                            num_ipus=1,
                            ipu_placement=True,
+                           precision_conversion_excluded_nodes=None,
+                           precision_mode=None,
                            config_file=None):
   """Python wrapper for the IPU transformation.
 
@@ -306,9 +327,13 @@ def create_inference_graph(input_saved_model_dir=None,
   Raises:
     ValueError: if the combination of the parameters is invalid.
   """
-  conversion_params = IpuConversionParams(excluded_nodes=excluded_nodes,
-                                          num_ipus=num_ipus,
-                                          ipu_placement=ipu_placement)
+  conversion_params = IpuConversionParams(
+      excluded_nodes=excluded_nodes,
+      num_ipus=num_ipus,
+      ipu_placement=ipu_placement,
+      precision_conversion_excluded_nodes=precision_conversion_excluded_nodes,
+      precision_mode=precision_mode,
+  )
 
   if config_file:
     conversion_params.load_from_json_file(config_file)
@@ -318,7 +343,8 @@ def create_inference_graph(input_saved_model_dir=None,
       input_saved_model_tags=input_saved_model_tags,
       input_saved_model_signature_key=input_saved_model_signature_key,
       conversion_params=conversion_params,
-      output_saved_model_dir=output_saved_model_dir)
+      output_saved_model_dir=output_saved_model_dir,
+  )
 
   converted_graph_def = ipu_converter.convert()
   if output_saved_model_dir:

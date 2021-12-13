@@ -22,6 +22,7 @@ Tests for SavedModelCLI tool.
 import os
 import json
 import numpy as np
+import tensorflow as tf
 
 from tensorflow.python.client import session
 from tensorflow.python.framework import ops
@@ -178,6 +179,63 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
       self.assertEqual(len(graph_def.node), 3)
       for node in graph_def.node:
         self.assertTrue(node.device != '/device:IPU:0')
+
+  def testPrecisionConversion(self):
+    parser = saved_model_cli.create_parser()
+    model_path = self._createSimpleSavedModel(shape=[1])
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert', '--dir', model_path, '--output_dir', converted_model_path,
+        '--tag_set', tag_constants.SERVING, 'ipu', '--precision_mode', 'FP16',
+        '--precision_conversion_excluded_nodes', '^add$'
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_dict = {node.name: node for node in graph_def.node}
+      self.assertEqual(node_dict['add'].attr['T'].type, tf.float32)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float16)
+
+  def testPrecisionConversionWithConfigFile(self):
+    parser = saved_model_cli.create_parser()
+    model_path = self._createSimpleSavedModel(shape=[1])
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    cfg_data = {
+        "precision_mode": "FP16",
+        "precision_conversion_excluded_nodes": [
+            "^add$",
+        ]
+    }
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
+
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_dict = {node.name: node for node in graph_def.node}
+      self.assertEqual(node_dict['add'].attr['T'].type, tf.float32)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float16)
 
   def testConvertWithConfigFile(self):
     cfg_data = {
