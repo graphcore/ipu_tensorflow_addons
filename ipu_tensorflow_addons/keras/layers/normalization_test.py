@@ -204,6 +204,7 @@ class GroupNormTest(test.TestCase):
     layer = layers.GroupNormalization()
     layer.build((1, 1, 1, 2))
     self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
   def testGetConfig(self):
@@ -335,6 +336,14 @@ class LayerTest(test.TestCase):
     self.assertAllEqual(layer_beta, upstream_layer_beta)
     self.assertAllEqual(layer_gamma, upstream_layer_gamma)
 
+  def testCopyWeightsFromUpstreamLayerMultiAxis(self):
+    input_shape = (10, 10, 30)
+    axis = (1, -1)
+    layer_beta, layer_gamma, upstream_layer_beta, upstream_layer_gamma = \
+      keras_layer_copy_weights(input_shape, axis=axis)
+    self.assertAllEqual(layer_beta, upstream_layer_beta)
+    self.assertAllEqual(layer_gamma, upstream_layer_gamma)
+
   def testDtype(self):
     layer = layers.LayerNormalization()
     layer.build((1, 1, 1, 2))
@@ -348,6 +357,7 @@ class LayerTest(test.TestCase):
     layer = layers.LayerNormalization()
     layer.build((1, 1, 1, 2))
     self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
   def testGetConfig(self):
@@ -469,6 +479,7 @@ class InstanceTest(test.TestCase):
     layer = layers.InstanceNormalization()
     layer.build((1, 1, 1, 2))
     self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
   def testGetConfig(self):
