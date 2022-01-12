@@ -28,17 +28,17 @@ from tensorflow.python.client import session
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import array_ops
-from tensorflow.python.saved_model import saved_model
 from tensorflow.python.saved_model import loader
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.saved_model import tag_constants
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
+from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
 
 
-class SavedModelCLITestCase(test_util.TensorFlowTestCase):
-  def _createSimpleSavedModel(self, shape):
+class SavedModelCLITestModel(ModelForTest):
+  def create(self):
     """
     Create a simple SavedModel on the fly.
     t = x + x
@@ -47,40 +47,41 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
 
     Placeholder -> AddV2 -> Mul
     """
-    saved_model_dir = os.path.join(self.get_temp_dir(), "simple_savedmodel")
-    with session.Session() as sess:
-      in_tensor = array_ops.placeholder(shape=shape, dtype=dtypes.float32)
-      tmp_tensor = in_tensor + in_tensor
-      out_tensor = tmp_tensor * tmp_tensor
-      inputs = {"x": in_tensor}
-      outputs = {"y": out_tensor}
-      saved_model.simple_save(sess, saved_model_dir, inputs, outputs)
-    return saved_model_dir
+    in_tensor = array_ops.placeholder(shape=[1],
+                                      dtype=dtypes.float32,
+                                      name="x")
+    tmp_tensor = in_tensor + in_tensor
+    out_tensor = tmp_tensor * tmp_tensor
+    return out_tensor
+
+
+class SavedModelCLITestCase(test_util.TensorFlowTestCase):
+  def setUp(self):
+    super().setUp()
+    self.model = SavedModelCLITestModel(freeze=True, save=True)
 
   def testRunCommandInputExprs(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     output_tensor_dir = os.path.join(self.get_temp_dir(), 'out_dir')
     args = parser.parse_args([
-        'run', '--dir', model_path, '--tag_set', tag_constants.SERVING,
-        '--signature_def',
+        'run', '--dir', self.model.model_path, '--tag_set',
+        tag_constants.SERVING, '--signature_def',
         signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY, '--input_exprs',
         'x=np.ones((1))', '--outdir', output_tensor_dir
     ])
     saved_model_cli.run(args)
-    y_actual = np.load(os.path.join(output_tensor_dir, 'y.npy'))
+    y_actual = np.load(os.path.join(output_tensor_dir, 'mul.npy'))
     y_expected = np.array([4.0])
     self.assertAllEqual(y_expected, y_actual)
 
   def testSimpleConvert(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
         'convert',
         '--dir',
-        model_path,
+        self.model.model_path,
         '--output_dir',
         converted_model_path,
         '--tag_set',
@@ -123,18 +124,18 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
         '0.3',
     ])
     saved_model_cli.run(run_args)
-    y_actual = np.load(os.path.join(output_tensor_dir, 'y.npy'))
+    y_actual = np.load(os.path.join(output_tensor_dir, 'mul.npy'))
     y_expected = np.array([4.0])
     self.assertAllEqual(y_expected, y_actual)
 
   def testConvertWithExcludedNodes(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
-    converted_model_path = os.path.join(test.get_temp_dir(),
+    converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
-        'convert', '--dir', model_path, '--output_dir', converted_model_path,
-        '--tag_set', tag_constants.SERVING, 'ipu', '--excluded_nodes', '^add$'
+        'convert', '--dir', self.model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--excluded_nodes', '^add$'
     ])
     saved_model_cli.convert_with_ipu(convert_args)
 
@@ -156,13 +157,12 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
 
   def testConvertWithNoIpuPlacement(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
         'convert',
         '--dir',
-        model_path,
+        self.model.model_path,
         '--output_dir',
         converted_model_path,
         '--tag_set',
@@ -182,13 +182,13 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
 
   def testPrecisionConversion(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
-        'convert', '--dir', model_path, '--output_dir', converted_model_path,
-        '--tag_set', tag_constants.SERVING, 'ipu', '--precision_mode', 'FP16',
-        '--precision_conversion_excluded_nodes', '^add$'
+        'convert', '--dir', self.model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--precision_mode', 'FP16', '--precision_conversion_excluded_nodes',
+        '^add$'
     ])
     saved_model_cli.convert_with_ipu(convert_args)
 
@@ -202,7 +202,6 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
 
   def testPrecisionConversionWithConfigFile(self):
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     cfg_data = {
@@ -218,7 +217,7 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
     convert_args = parser.parse_args([
         'convert',
         '--dir',
-        model_path,
+        self.model.model_path,
         '--output_dir',
         converted_model_path,
         '--tag_set',
@@ -248,13 +247,12 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
       json.dump(cfg_data, f)
 
     parser = saved_model_cli.create_parser()
-    model_path = self._createSimpleSavedModel(shape=[1])
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
         'convert',
         '--dir',
-        model_path,
+        self.model.model_path,
         '--output_dir',
         converted_model_path,
         '--tag_set',

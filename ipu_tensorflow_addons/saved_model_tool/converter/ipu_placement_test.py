@@ -12,71 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
+"""Test for IPUPlacement Converter"""
 
-import unittest
-import tempfile
-import os
-import shutil
 import numpy as np
-
-from tensorflow.python.ops import math_ops
-from tensorflow.saved_model.signature_def_utils import predict_signature_def
-from tensorflow.saved_model import tag_constants
-from tensorflow.python.saved_model import signature_constants
 import tensorflow.compat.v1 as tf
-from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuGraphConverter, IpuConversionParams
+from tensorflow.python.ops import math_ops
+from tensorflow.python.framework import test_util
+from tensorflow.python.platform import test
+from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuConversionParams
+from ipu_tensorflow_addons.saved_model_tool.converter import IPUPlacement
+from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import \
+    ModelForTest
+
 tf.disable_v2_behavior()
 
 
-class TestSavedmodel(object):
-  def __init__(self):
-    # Create temp directory for saving savedmodel
-    self.base_path = tempfile.mkdtemp()
-    print("Temp directory {} created.".format(self.base_path))
-    self.model_path = self._create_test_savedmodel(self.base_path)
+class TestSavedmodel(ModelForTest):
+  def create(self):
+    x = tf.placeholder(np.float32, [8, 8], name="x")
 
-  def __del__(self):
-    # Remove temp directory created by __init__()
-    print("Remove temp directory {}.".format(self.base_path))
-    shutil.rmtree(self.base_path)
+    w0 = tf.get_variable("w0", shape=[8, 8], dtype=tf.float32)
+    x = tf.matmul(w0, x)
 
-  @staticmethod
-  def _create_test_savedmodel(base_path):
-    def basic_graph(x):
-      w0 = tf.get_variable("w0", shape=[8, 8], dtype=tf.float32)
-      x = tf.matmul(w0, x)
-
-      w1 = tf.get_variable("w1", shape=[8, 8], dtype=tf.float32)
-      x = tf.matmul(w1, x)
-      y = math_ops.reduce_sum(x)
-      return y
-
-    model_path = os.path.join(base_path, "test_savedmodel")
-
-    with tf.Graph().as_default():
-      x = tf.placeholder(np.float32, [8, 8], name="x")
-      y = basic_graph(x)
-
-      with tf.Session() as sess:
-        tf.global_variables_initializer().run()
-        builder = tf.saved_model.builder.SavedModelBuilder(model_path)
-        signature = predict_signature_def(inputs={'Input': x},
-                                          outputs={'Output': y})
-        builder.add_meta_graph_and_variables(
-            sess=sess,
-            tags=[tag_constants.SERVING],
-            signature_def_map={
-                signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY:
-                signature
-            })
-        builder.save()
-
-    return model_path
+    w1 = tf.get_variable("w1", shape=[8, 8], dtype=tf.float32)
+    x = tf.matmul(w1, x)
+    y = math_ops.reduce_sum(x)
+    return y
 
 
-class IpuPlacementTestCase(unittest.TestCase):
+class IpuPlacementTestCase(test_util.TensorFlowTestCase):
   def setUp(self):
-    self.test_model = TestSavedmodel()
+    self.test_model = TestSavedmodel(freeze=True)
+    self.test_graph_def = self.test_model.graph_def
+    self.test_signature_def = self.test_model.signature_def
 
   @staticmethod
   def _check_ipu_placement(node):
@@ -91,10 +59,11 @@ class IpuPlacementTestCase(unittest.TestCase):
 
   def test_ipu_placement(self):
     # check node with ipu placement
-    converter = IpuGraphConverter(
-        input_saved_model_dir=self.test_model.model_path,
-        conversion_params=IpuConversionParams())
-    graph_def = converter.convert()
+    params = IpuConversionParams()
+    converter = IPUPlacement(params)
+    graph_def, _ = converter.apply(self.test_graph_def,
+                                   self.test_signature_def)
+
     self.assertIsNotNone(graph_def)
     self.assertGreater(len(graph_def.node), 0)
 
@@ -105,10 +74,10 @@ class IpuPlacementTestCase(unittest.TestCase):
 
   def test_no_ipu_placement(self):
     # check node without ipu placement
-    converter = IpuGraphConverter(
-        input_saved_model_dir=self.test_model.model_path,
-        conversion_params=IpuConversionParams(ipu_placement=False))
-    graph_def = converter.convert()
+    params = IpuConversionParams(ipu_placement=False)
+    converter = IPUPlacement(params)
+    graph_def, _ = converter.apply(self.test_graph_def,
+                                   self.test_signature_def)
     self.assertIsNotNone(graph_def)
     self.assertGreater(len(graph_def.node), 0)
 
@@ -121,10 +90,10 @@ class IpuPlacementTestCase(unittest.TestCase):
     excluded_nodes = [
         '^MatMul$',
     ]
-    converter = IpuGraphConverter(
-        input_saved_model_dir=self.test_model.model_path,
-        conversion_params=IpuConversionParams(excluded_nodes=excluded_nodes))
-    graph_def = converter.convert()
+    params = IpuConversionParams(excluded_nodes=excluded_nodes)
+    converter = IPUPlacement(params)
+    graph_def, _ = converter.apply(self.test_graph_def,
+                                   self.test_signature_def)
     self.assertIsNotNone(graph_def)
     self.assertGreater(len(graph_def.node), 0)
     for node in graph_def.node:
@@ -137,4 +106,4 @@ class IpuPlacementTestCase(unittest.TestCase):
 
 
 if __name__ == '__main__':
-  unittest.main()
+  test.main()

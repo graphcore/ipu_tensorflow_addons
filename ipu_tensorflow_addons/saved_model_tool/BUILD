@@ -17,7 +17,10 @@ py_library(
 
 py_test(
     name = "ipu_placement_test",
-    srcs = ["converter/ipu_placement_test.py"],
+    srcs = [
+        "converter/ipu_placement_test.py",
+        "saved_model_test_utils.py",
+    ],
     deps = [
         ":saved_model_tool",
     ],
@@ -27,6 +30,7 @@ py_test(
     name = "precision_conversion_test",
     srcs = [
         "converter/precision_conversion_test.py",
+        "saved_model_test_utils.py",
     ],
     deps = [
         ":saved_model_tool",
@@ -35,7 +39,10 @@ py_test(
 
 py_test(
     name = "saved_model_cli_test",
-    srcs = ["saved_model_cli_test.py"],
+    srcs = [
+        "saved_model_cli_test.py",
+        "saved_model_test_utils.py",
+    ],
     deps = [
         ":saved_model_tool",
     ],

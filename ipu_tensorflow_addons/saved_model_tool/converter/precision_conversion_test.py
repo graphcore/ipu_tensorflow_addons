@@ -12,32 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-import unittest
 import copy
 
-from tensorflow.saved_model.signature_def_utils import predict_signature_def
-from tensorflow.python.client import session
 from tensorflow import disable_v2_behavior
-from tensorflow.python.framework import importer
-from tensorflow.python.framework import test_util
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-
-from tensorflow.python.ops import standard_ops
-from tensorflow.python.ops import sparse_ops
-from tensorflow.python.ops import variables
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import random_ops
-from tensorflow.python.ops import variable_scope
-from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuConversionParams
-from ipu_tensorflow_addons.saved_model_tool.converter import PrecisionConversion
+from tensorflow.python.client import session
+from tensorflow.python.platform import test
+from tensorflow.python.framework import dtypes, importer, ops, test_util
+from tensorflow.python.ops import (array_ops, math_ops, random_ops, sparse_ops,
+                                   standard_ops, variable_scope)
+from ipu_tensorflow_addons.saved_model_tool.converter import \
+    PrecisionConversion
+from ipu_tensorflow_addons.saved_model_tool.ipu_convert import \
+    IpuConversionParams
+from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import \
+    ModelForTest, declare_signature
 
 disable_v2_behavior()
 
 
-def create_test_graph_def():
-  def basic_graph(x):
+class PrecisionTestSavedModel(ModelForTest):
+  @declare_signature(input_name_keys=["x"], output_name_keys=["y"])
+  def create(self):
+    x = array_ops.placeholder(dtypes.float32, [8, 8], name="x")
     label = array_ops.expand_dims(array_ops.constant([0, 1, 2, 3, 4, 6, 7, 9]),
                                   1)
     index = array_ops.expand_dims(math_ops.range(0, 8), 1)
@@ -57,21 +53,12 @@ def create_test_graph_def():
     y = standard_ops.reduce_sum(x)
     return y
 
-  with ops.Graph().as_default():
-    x = array_ops.placeholder(dtypes.float32, [8, 8], name="x")
-    y = basic_graph(x)
-
-    with session.Session():
-      variables.global_variables_initializer().run()
-      graph_def = ops.get_default_graph().as_graph_def()
-      signature_def = predict_signature_def(inputs={'Input': x},
-                                            outputs={'Output': y})
-  return graph_def, signature_def
-
 
 class PrecisionConversionTestCase(test_util.TensorFlowTestCase):
   def setUp(self):
-    self._graph_def, self._signature_def = create_test_graph_def()
+    self.model = PrecisionTestSavedModel(freeze=True)
+    self._graph_def, self._signature_def = \
+      self.model.graph_def, self.model.signature_def
 
   def test_fp32_to_fp16(self):
     graph_def = copy.deepcopy(self._graph_def)
@@ -138,4 +125,4 @@ class PrecisionConversionTestCase(test_util.TensorFlowTestCase):
 
 
 if __name__ == '__main__':
-  unittest.main()
+  test.main()
