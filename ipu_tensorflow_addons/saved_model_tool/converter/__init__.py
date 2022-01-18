@@ -16,4 +16,5 @@
 from ipu_tensorflow_addons.saved_model_tool.converter.converter import Converter
 from ipu_tensorflow_addons.saved_model_tool.converter.ipu_placement import IPUPlacement
 from ipu_tensorflow_addons.saved_model_tool.converter.precision_conversion import PrecisionConversion
+from ipu_tensorflow_addons.saved_model_tool.converter.manual_shard import ManualSharding
 from ipu_tensorflow_addons.saved_model_tool.converter.converter_pipeline import ConverterPipeline

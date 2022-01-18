@@ -33,6 +33,8 @@ from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.saved_model import tag_constants
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
+from tensorflow.compiler.xla import xla_data_pb2
+from tensorflow.core.framework import attr_value_pb2
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
 
@@ -278,6 +280,144 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
           self.assertTrue(node.device != '/device:IPU:0')
         else:
           self.assertTrue(node.device == '/device:IPU:0')
+
+  def testManualShardingCLI(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert', '--dir', self.model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--num_ipus', '2', '--manual_sharding', '[["^add$"], ["^mul$"]]'
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      for node in graph_def.node:
+        if 'add' in node.name:
+          self.assertTrue(check_sharding_num(node, 0))
+          self.assertFalse(check_sharding_num(node, 1))
+        if 'mul' in node.name:
+          self.assertTrue(check_sharding_num(node, 1))
+          self.assertFalse(check_sharding_num(node, 0))
+
+  def testManualShardingConfig(self):
+    cfg_data = {"num_ipus": 2, "manual_sharding": [["^add$"], ["^mul$"]]}
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
+
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      for node in graph_def.node:
+        if 'add' in node.name:
+          self.assertTrue(check_sharding_num(node, 0))
+          self.assertFalse(check_sharding_num(node, 1))
+        if 'mul' in node.name:
+          self.assertTrue(check_sharding_num(node, 1))
+          self.assertFalse(check_sharding_num(node, 0))
+
+  def testWithoutManualShardingCLI(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      for node in graph_def.node:
+        if 'add' in node.name:
+          self.assertFalse(check_sharding_num(node, 0))
+          self.assertFalse(check_sharding_num(node, 1))
+        if 'mul' in node.name:
+          self.assertFalse(check_sharding_num(node, 1))
+          self.assertFalse(check_sharding_num(node, 0))
+
+  def testWithoutManualShardingConfig(self):
+    cfg_data = {
+        "num_ipus": 2,
+        "manual_sharding": [],
+    }
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
+
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      for node in graph_def.node:
+        if 'add' in node.name:
+          self.assertFalse(check_sharding_num(node, 0))
+          self.assertFalse(check_sharding_num(node, 1))
+        if 'mul' in node.name:
+          self.assertFalse(check_sharding_num(node, 1))
+          self.assertFalse(check_sharding_num(node, 0))
+
+
+def check_sharding_num(node, index):
+  if '_XlaSharding' not in node.attr:
+    return False
+
+  proto = xla_data_pb2.OpSharding(type=xla_data_pb2.OpSharding.MAXIMAL,
+                                  tile_assignment_devices=[index])
+  attr_value = attr_value_pb2.AttrValue(s=proto.SerializeToString())
+
+  if node.attr['_XlaSharding'] != attr_value:
+    return False
+
+  return True
 
 
 if __name__ == '__main__':

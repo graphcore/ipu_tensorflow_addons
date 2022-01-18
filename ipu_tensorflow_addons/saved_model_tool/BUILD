@@ -8,6 +8,7 @@ py_library(
         "converter/converter.py",
         "converter/converter_pipeline.py",
         "converter/ipu_placement.py",
+        "converter/manual_shard.py",
         "converter/precision_conversion.py",
         "converter/utils.py",
         "ipu_convert.py",
@@ -30,6 +31,17 @@ py_test(
     name = "precision_conversion_test",
     srcs = [
         "converter/precision_conversion_test.py",
+        "saved_model_test_utils.py",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
+    name = "manual_shard_test",
+    srcs = [
+        "converter/manual_shard_test.py",
         "saved_model_test_utils.py",
     ],
     deps = [

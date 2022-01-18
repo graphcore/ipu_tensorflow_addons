@@ -34,7 +34,6 @@ from tensorflow.python.saved_model import builder
 from tensorflow.python.saved_model import loader
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.saved_model import tag_constants
-from tensorflow.python import ipu
 
 from ipu_tensorflow_addons.saved_model_tool.converter import ConverterPipeline
 
@@ -50,6 +49,7 @@ class IpuConversionParams(object):
     - **excluded_nodes** - list of node names to prevent the converter from touching.
     - **num_ipus** - number ipus to run the model.
     - **ipu_placement** - do ipu placement or not.
+    - **manual_sharding** - specify regular expressions to control which nodes will be sharded.
   """
 
   # pylint:enable=line-too-long
@@ -58,7 +58,8 @@ class IpuConversionParams(object):
                num_ipus=1,
                ipu_placement=True,
                precision_mode=None,
-               precision_conversion_excluded_nodes=None):
+               precision_conversion_excluded_nodes=None,
+               manual_sharding=None):
     self.excluded_nodes = excluded_nodes
     self.num_ipus = num_ipus
     self.ipu_placement = ipu_placement
@@ -66,6 +67,7 @@ class IpuConversionParams(object):
     self.precision_mode = precision_mode
     self.precision_conversion_excluded_nodes = (
         precision_conversion_excluded_nodes)
+    self.manual_sharding = manual_sharding
 
   def load_from_json_file(self, config_file):
     if not os.access(config_file, os.R_OK):
@@ -90,6 +92,10 @@ class IpuConversionParams(object):
       self.precision_conversion_excluded_nodes = config[
           "precision_conversion_excluded_nodes"]
 
+    if ("manual_sharding" in config
+        and isinstance(config["manual_sharding"], list)):
+      self.manual_sharding = config["manual_sharding"]
+
   def save_to_json_file(self, directory):
     if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
       raise ValueError(
@@ -105,12 +111,15 @@ class IpuConversionParams(object):
     config["precision_conversion_excluded_nodes"] = (
         self.precision_conversion_excluded_nodes)
 
+    if self.manual_sharding:
+      config["manual_sharding"] = self.manual_sharding
+
     config_file_path = os.path.join(directory, 'conversion_params.json')
     with open(config_file_path, 'w') as fp:
       json.dump(config, fp, indent=4)
 
 
-def _check_conversion_params(conversion_params):
+def _check_conversion_params(conversion_params: IpuConversionParams):
   """Validate the provided IpuConversionParams.
 
   Args:
@@ -130,6 +139,20 @@ def _check_conversion_params(conversion_params):
 
   if not isinstance(conversion_params.ipu_placement, bool):
     raise ValueError("ipu_placement should be True or False")
+
+  if conversion_params.manual_sharding is not None:
+    if not isinstance(conversion_params.manual_sharding, list):
+      raise ValueError("manual_sharding should be a list of lists of strings")
+
+    for reg_list in conversion_params.manual_sharding:
+      if not isinstance(reg_list, list):
+        raise TypeError("manual_sharding must only contain lists of strings, "
+                        f"not {type(reg_list)}.")
+      for str_type in reg_list:
+        if not isinstance(str_type, str):
+          raise TypeError(
+              "manual_sharding must only contain lists of strings, "
+              f"not lists of {type(str_type)}.")
 
 
 class IpuGraphConverter(object):
@@ -302,6 +325,7 @@ def create_inference_graph(input_saved_model_dir=None,
                            ipu_placement=True,
                            precision_conversion_excluded_nodes=None,
                            precision_mode=None,
+                           manual_sharding=None,
                            config_file=None):
   """Python wrapper for the IPU transformation.
 
@@ -318,6 +342,8 @@ def create_inference_graph(input_saved_model_dir=None,
     excluded_nodes: list of node names to prevent the converter from touching.
     num_ipus: number ipus to run the model.
     ipu_placement: do ipu placement or not.
+    manual_sharding: specify regular expressions to control
+      which nodes will be sharded.
     config_file: config file path.
 
   Returns:
@@ -333,7 +359,7 @@ def create_inference_graph(input_saved_model_dir=None,
       ipu_placement=ipu_placement,
       precision_conversion_excluded_nodes=precision_conversion_excluded_nodes,
       precision_mode=precision_mode,
-  )
+      manual_sharding=manual_sharding)
 
   if config_file:
     conversion_params.load_from_json_file(config_file)

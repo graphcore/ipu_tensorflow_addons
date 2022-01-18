@@ -17,6 +17,7 @@
 # ==============================================================================
 from ipu_tensorflow_addons.saved_model_tool.converter import IPUPlacement
 from ipu_tensorflow_addons.saved_model_tool.converter import PrecisionConversion
+from ipu_tensorflow_addons.saved_model_tool.converter import ManualSharding
 
 
 class ConverterPipeline():
@@ -25,6 +26,7 @@ class ConverterPipeline():
     self._converters = list()
     self._converters.append(IPUPlacement(param))
     self._converters.append(PrecisionConversion(param))
+    self._converters.append(ManualSharding(param))
 
   def ApplyConverters(self, graph_def, signature_def):
     for converter in self._converters:

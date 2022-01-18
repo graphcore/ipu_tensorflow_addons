@@ -19,6 +19,7 @@
 Command-line interface to convert and execute a graph in a SavedModel on IPU.
 """
 
+import ast
 import sys
 import argparse
 from tensorflow.python.tools import saved_model_cli as cli
@@ -69,9 +70,14 @@ def convert_with_ipu(args):
       ipu_placement=not bool(args.no_ipu_placement),
       precision_conversion_excluded_nodes=(
           args.precision_conversion_excluded_nodes),
+      manual_sharding=args.manual_sharding,
       config_file=args.config_file,
       precision_mode=args.precision_mode,
   )
+
+
+def list_of_lists_str(strs):
+  return ast.literal_eval(strs)
 
 
 def create_parser():
@@ -136,11 +142,22 @@ def create_parser():
       default=[],
       help='ops that will not have their precision changed by --precision_mode'
   )
+  parser_convert_with_ipu.add_argument(
+      '--manual_sharding',
+      action='store',
+      type=list_of_lists_str,
+      default=[],
+      help=(
+          "A list containing a list of regular expression strings for each IPU."
+          " Nodes who's names match the expressions for a given IPU"
+          " will be sharded on that IPU."
+          " Nodes which match no expressions will be placed on IPU0."))
   parser_convert_with_ipu.add_argument('--config_file',
                                        type=str,
                                        default=None,
                                        action="store",
                                        help='config file path (json format).')
+
   parser_convert_with_ipu.set_defaults(func=convert_with_ipu)
 
   parser_convert = parser._subparsers._group_actions[0].choices['convert']  # pylint: disable=W0212
