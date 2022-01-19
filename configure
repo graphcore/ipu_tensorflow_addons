@@ -95,10 +95,10 @@ if [ ! -z "${TF_POPLAR_BASE}" ] && [ ! -z "${TF_POPLAR_SANDBOX}" ]; then
 fi
 if command -v popc &> /dev/null; then
   # If Poplar is already in you PATH, that would take precedence over TF_POPLAR_BASE or TF_POPLAR_SANDBOX.
-  if [ -z "${TF_POPLAR_BASE}" ]; then
+  if [ -n "${TF_POPLAR_BASE}" ]; then
     echo "ERROR: TF_POPLAR_BASE is set but Poplar is already in your PATH"
     exit 1
-  elif [ -z "${TF_POPLAR_SANDBOX}" ]; then
+  elif [ -n "${TF_POPLAR_SANDBOX}" ]; then
     echo "ERROR: TF_POPLAR_SANDBOX is set but Poplar is already in your PATH"
     exit 1
   fi
