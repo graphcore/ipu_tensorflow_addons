@@ -15,6 +15,8 @@ RNN available_memory_proportion_fwd/available_memory_proportion_bwd deprecated
 
 Thgite ``available_memory_proportion_fwd`` and ``available_memory_proportion_bwd`` arguments have been deprecated and will be removed from the following layers in a future release:
 
+  - ipu_tensorflow_addons.keras.layers.rnn.PopnnLSTM
+  - ipu_tensorflow_addons.keras.layers.rnn.PopnnGRU
   - ipu_tensorflow_addons.v1.layers.rnn_ops.PopnnLSTM
   - ipu_tensorflow_addons.v1.layers.rnn_ops.PopnnDynamicLSTM
   - ipu_tensorflow_addons.v1.layers.rnn_ops.PopnnGRU

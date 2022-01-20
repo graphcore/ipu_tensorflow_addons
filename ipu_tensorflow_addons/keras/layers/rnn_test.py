@@ -24,6 +24,7 @@ from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.eager import def_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.keras.layers import recurrent_v2
@@ -63,7 +64,8 @@ def _getLSTMLayer(keras_layer=None,
                   stateful=False,
                   kernel_initializer=None,
                   recurrent_initializer=None,
-                  bias_initializer=None):
+                  bias_initializer=None,
+                  **kwargs):
   kernel_initializer = (kernel_initializer if kernel_initializer else
                         init_ops.constant_initializer(0.1, data_type))
   recurrent_initializer = (recurrent_initializer if recurrent_initializer else
@@ -81,7 +83,8 @@ def _getLSTMLayer(keras_layer=None,
                      return_sequences=return_sequences,
                      return_state=return_state,
                      unit_forget_bias=unit_forget_bias,
-                     stateful=stateful)
+                     stateful=stateful,
+                     **kwargs)
 
 
 def _kerasLSTMImpl(instance,
@@ -478,6 +481,76 @@ class IpuLstmTest(test.TestCase):
       losses = history.history['loss']
       self.assertTrue(losses[0] > losses[-1])
 
+  def test_options(self):
+    # Prepare Data
+    xs, h, c = self._get_random_inputs(num_samples=2)
+    x_fit, _ = xs[0], xs[1]
+    y = np.random.rand(batch_size, num_hidden).astype(data_type)
+
+    def run_layer(options=None, options_bwd=None):
+      strategy = ipu.ipu_strategy.IPUStrategy()
+      with strategy.scope():
+        layer = _getLSTMLayer(layers.PopnnLSTM,
+                              options=options,
+                              options_bwd=options_bwd)
+        layer.build((batch_size, timesteps, num_input))
+
+        # Create IPU graph.
+        initial_h = keras.Input(batch_shape=(batch_size, num_hidden))
+        initial_c = keras.Input(batch_shape=(batch_size, num_hidden))
+        inputs = keras.Input(batch_shape=(batch_size, timesteps, num_input))
+        outputs = layer(inputs, initial_state=(initial_h, initial_c))
+
+        # Create, and fit with an IPU model.
+        model = keras.Model(inputs=(inputs, initial_h, initial_c),
+                            outputs=outputs)
+        model.compile(loss='categorical_crossentropy', optimizer='adam')
+        model.fit((x_fit, h, c), y, batch_size=batch_size)
+
+    error_msg = r'\[Poplar\]\[Build graph\] invalid_option:.*'
+    with self.assertRaisesRegex(errors.InternalError, error_msg):
+      run_layer(options={'availableMemoryProportion': -273.15})
+    with self.assertRaisesRegex(errors.InternalError, error_msg):
+      run_layer(options_bwd={'availableMemoryProportion': -273.15})
+    run_layer(options={'availableMemoryProportion': 0.42})
+    run_layer(options_bwd={'availableMemoryProportion': 0.42})
+
+  # TODO(T54285): Delete this test.
+  def test_options_with_amp(self):
+    layer = _getLSTMLayer(layers.PopnnLSTM,
+                          available_memory_proportion_fwd=0.1)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+
+    layer = _getLSTMLayer(layers.PopnnLSTM,
+                          available_memory_proportion_fwd=0.1,
+                          available_memory_proportion_bwd=0.2)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = _getLSTMLayer(layers.PopnnLSTM,
+                          available_memory_proportion_fwd=0.1,
+                          available_memory_proportion_bwd=0.2,
+                          options={'availableMemoryProportion': 0.3})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = _getLSTMLayer(layers.PopnnLSTM,
+                          available_memory_proportion_fwd=0.1,
+                          available_memory_proportion_bwd=0.2,
+                          options={'availableMemoryProportion': 0.3},
+                          options_bwd={'availableMemoryProportion': 0.4})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.4)  # pylint: disable=protected-access
+
 
 def _getGRULayer(keras_layer=None,
                  return_state=True,
@@ -488,7 +561,8 @@ def _getGRULayer(keras_layer=None,
                  reset_after=False,
                  kernel_initializer=None,
                  recurrent_initializer=None,
-                 bias_initializer=None):
+                 bias_initializer=None,
+                 **kwargs):
   kernel_initializer = (kernel_initializer
                         or init_ops.constant_initializer(0.1, data_type))
   recurrent_initializer = (recurrent_initializer
@@ -506,7 +580,8 @@ def _getGRULayer(keras_layer=None,
                      return_sequences=return_sequences,
                      return_state=return_state,
                      reset_after=reset_after,
-                     stateful=stateful)
+                     stateful=stateful,
+                     **kwargs)
 
 
 def _kerasGRUImpl(instance,
@@ -872,6 +947,73 @@ class IpuGruTest(test.TestCase):
     config = layer.get_config()
     layer2 = layers.PopnnGRU.from_config(config)
     self.assertEqual(config, layer2.get_config())
+
+  def test_options(self):
+    # Prepare Data
+    xs, init = self._get_random_inputs(num_samples=2)
+    x_fit, _ = xs[0], xs[1]
+    y = np.random.rand(batch_size, num_hidden).astype(data_type)
+
+    def run_layer(options=None, options_bwd=None):
+      strategy = ipu.ipu_strategy.IPUStrategy()
+      with strategy.scope():
+        layer = _getGRULayer(layers.PopnnGRU,
+                             options=options,
+                             options_bwd=options_bwd)
+        layer.build((batch_size, timesteps, num_input))
+
+        # Create IPU graph.
+        initial_state = keras.Input(batch_shape=(batch_size, num_hidden))
+        inputs = keras.Input(batch_shape=(batch_size, timesteps, num_input))
+        outputs = layer(inputs, initial_state=initial_state)
+
+        # Create, and fit with an IPU model.
+        model = keras.Model(inputs=(inputs, initial_state), outputs=outputs)
+        model.compile(loss='categorical_crossentropy', optimizer='adam')
+        model.fit((x_fit, init), y, batch_size=batch_size)
+
+    error_msg = r'\[Poplar\]\[Build graph\] invalid_option:.*'
+    with self.assertRaisesRegex(errors.InternalError, error_msg):
+      run_layer(options={'availableMemoryProportion': -273.15})
+    with self.assertRaisesRegex(errors.InternalError, error_msg):
+      run_layer(options_bwd={'availableMemoryProportion': -273.15})
+    run_layer(options={'availableMemoryProportion': 0.42})
+    run_layer(options_bwd={'availableMemoryProportion': 0.42})
+
+  # TODO(T54285): Delete this test.
+  def test_options_with_amp(self):
+    layer = _getGRULayer(layers.PopnnGRU, available_memory_proportion_fwd=0.1)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+
+    layer = _getGRULayer(layers.PopnnGRU,
+                         available_memory_proportion_fwd=0.1,
+                         available_memory_proportion_bwd=0.2)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = _getGRULayer(layers.PopnnGRU,
+                         available_memory_proportion_fwd=0.1,
+                         available_memory_proportion_bwd=0.2,
+                         options={'availableMemoryProportion': 0.3})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = _getGRULayer(layers.PopnnGRU,
+                         available_memory_proportion_fwd=0.1,
+                         available_memory_proportion_bwd=0.2,
+                         options={'availableMemoryProportion': 0.3},
+                         options_bwd={'availableMemoryProportion': 0.4})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.4)  # pylint: disable=protected-access
 
 
 if __name__ == '__main__':
