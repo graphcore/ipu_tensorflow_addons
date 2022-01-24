@@ -273,22 +273,19 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
   def testGRUWithAvailableMemoryProportionFwd(self, valid_value):
     self._configure_ipu()
 
-    def run_gru(available_memory_proportion_fwd):
+    def run_gru(options):
       X = _generate_inputs()
       labels = _generate_outputs()
 
-      return lambda: self._run_layer(_PopnnGRU,
-                                     X,
-                                     labels,
-                                     available_memory_proportion_fwd=
-                                     available_memory_proportion_fwd)
+      return lambda: self._run_layer(
+          _PopnnGRU, X, labels, options=options, options_bwd=options)
 
     if valid_value:
-      run_gru(0.8)()
+      run_gru({'availableMemoryProportion': 0.8})()
     else:
       self.assertRaisesRegex(errors.InternalError,
                              "Value must be greater than or equal to 0",
-                             run_gru(-123.))
+                             run_gru({'availableMemoryProportion': -123.}))
 
   @test_util.deprecated_graph_mode_only
   def testGRUGreaterAvailableMemoryProportionFwdMeansGreaterTotalTileMemory(
@@ -317,14 +314,16 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
                     name=name,
                     batch_size=batch_size,
                     num_hidden=num_hidden,
-                    available_memory_proportion_fwd=0.8)
+                    options={'availableMemoryProportion': 0.8},
+                    options_bwd={'availableMemoryProportion': 0.8})
     self._run_layer(_PopnnGRU,
                     X,
                     labels,
                     name=name,
                     batch_size=batch_size,
                     num_hidden=num_hidden,
-                    available_memory_proportion_fwd=0.1)
+                    options={'availableMemoryProportion': 0.1},
+                    options_bwd={'availableMemoryProportion': 0.1})
 
     report_paths = report_helper.find_reports()
     self.assertEqual(len(report_paths), 2)
@@ -338,19 +337,18 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
                                     batch_size=BATCH_SIZE,
                                     input_size=INPUT_SIZE,
                                     num_hidden=NUM_HIDDEN,
-                                    available_memory_proportion_bwd=None):
+                                    options_bwd=None):
     X = _generate_inputs(batch_size=batch_size, input_size=input_size)
     labels = _generate_outputs(batch_size=batch_size, num_hidden=num_hidden)
 
-    self._run_layer(
-        _PopnnGRU,
-        X,
-        labels,
-        name=name,
-        batch_size=batch_size,
-        num_hidden=num_hidden,
-        num_training_steps=1,
-        available_memory_proportion_bwd=available_memory_proportion_bwd)
+    self._run_layer(_PopnnGRU,
+                    X,
+                    labels,
+                    name=name,
+                    batch_size=batch_size,
+                    num_hidden=num_hidden,
+                    num_training_steps=1,
+                    options_bwd=options_bwd)
 
   @parameterized.parameters((True), (False))
   @test_util.deprecated_graph_mode_only
@@ -365,13 +363,13 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
 
     with self.session():
       if valid_value:
-        self._run_single_gru_training_step(name=name,
-                                           available_memory_proportion_bwd=0.7)
+        self._run_single_gru_training_step(
+            name=name, options_bwd={'availableMemoryProportion': 0.7})
       else:
         with self.assertRaisesRegex(
             errors.InternalError, "Value must be greater than or equal to 0"):
           self._run_single_gru_training_step(
-              name=name, available_memory_proportion_bwd=-123.)
+              name=name, options_bwd={'availableMemoryProportion': -123.})
 
   @test_util.deprecated_graph_mode_only
   def testGRUGreaterAvailableMemoryProportionBwdMeansGreaterTotalTileMemory(
@@ -388,16 +386,18 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     input_size = 256
     num_hidden = 256
 
-    self._run_single_gru_training_step(name=name,
-                                       batch_size=batch_size,
-                                       input_size=input_size,
-                                       num_hidden=num_hidden,
-                                       available_memory_proportion_bwd=0.8)
-    self._run_single_gru_training_step(name=name,
-                                       batch_size=batch_size,
-                                       input_size=input_size,
-                                       num_hidden=num_hidden,
-                                       available_memory_proportion_bwd=0.1)
+    self._run_single_gru_training_step(
+        name=name,
+        batch_size=batch_size,
+        input_size=input_size,
+        num_hidden=num_hidden,
+        options_bwd={'availableMemoryProportion': 0.8})
+    self._run_single_gru_training_step(
+        name=name,
+        batch_size=batch_size,
+        input_size=input_size,
+        num_hidden=num_hidden,
+        options_bwd={'availableMemoryProportion': 0.1})
 
     report_paths = report_helper.find_reports()
     self.assertEqual(len(report_paths), 2)
@@ -405,6 +405,41 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
 
     self.assertGreater(_total_tile_memory(reports[0]),
                        _total_tile_memory(reports[1]))
+
+  # TODO(T54285): Delete this test.
+  def testGruOptionsWithAmp(self):
+    layer = layers.PopnnGRU(2, available_memory_proportion_fwd=0.1)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+
+    layer = layers.PopnnGRU(2,
+                            available_memory_proportion_fwd=0.1,
+                            available_memory_proportion_bwd=0.2)
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = layers.PopnnGRU(2,
+                            available_memory_proportion_fwd=0.1,
+                            available_memory_proportion_bwd=0.2,
+                            options={'availableMemoryProportion': 0.3})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
+
+    layer = layers.PopnnGRU(2,
+                            available_memory_proportion_fwd=0.1,
+                            available_memory_proportion_bwd=0.2,
+                            options={'availableMemoryProportion': 0.3},
+                            options_bwd={'availableMemoryProportion': 0.4})
+    self.assertTrue(
+        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
+    self.assertTrue(
+        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.4)  # pylint: disable=protected-access
 
 
 if __name__ == "__main__":
