@@ -19,7 +19,7 @@ A collection of addons for IPU TensorFlow
 
 try:
   # Test if IPU TensorFlow is available.
-  import tensorflow.python.ipu as ipu
+  from tensorflow.python import ipu
   # Remove the reference we just created from this namespace.
   del ipu
 except ModuleNotFoundError:
