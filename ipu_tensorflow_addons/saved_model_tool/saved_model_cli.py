@@ -68,6 +68,7 @@ def convert_with_ipu(args):
       excluded_nodes=args.excluded_nodes,
       num_ipus=args.num_ipus,
       ipu_placement=not bool(args.no_ipu_placement),
+      remove_excluded_nodes=bool(args.remove_excluded_nodes),
       precision_conversion_excluded_nodes=(
           args.precision_conversion_excluded_nodes),
       manual_sharding=args.manual_sharding,
@@ -94,7 +95,7 @@ def create_parser():
       '--init_ipu',
       action='store_true',
       default=None,
-      help='if specified, ipu.utils.configure_ipu_system() will be called. '
+      help='If specified, ipu.utils.configure_ipu_system() will be called. '
       'This option should be only used if the worker is a IPU job.')
   parser_run.add_argument('--num_ipus',
                           type=int,
@@ -103,17 +104,17 @@ def create_parser():
   parser_run.add_argument('--matmul_amp',
                           type=str,
                           default='0.6',
-                          help='availableMemoryProportion for matmul.')
+                          help='AvailableMemoryProportion for matmul.')
   parser_run.add_argument('--conv_amp',
                           type=str,
                           default='0.6',
-                          help='availableMemoryProportion for convolution.')
+                          help='AvailableMemoryProportion for convolution.')
   parser_run.set_defaults(func=run)
 
   # Add an `ipu` choice to the "conversion methods" subparsers
   parser_convert_with_ipu = argparse.ArgumentParser(
       'ipu',
-      description="Convert the SavedModel with IPU integration",
+      description="Convert the SavedModel with IPU integration.",
       formatter_class=argparse.RawTextHelpFormatter)
 
   parser_convert_with_ipu.add_argument(
@@ -121,27 +122,33 @@ def create_parser():
       type=str,
       nargs='+',
       default=[],
-      help='Ops that do not need to be placed on the ipu')
+      help='Ops that do not need to be placed on the IPU.')
   parser_convert_with_ipu.add_argument('--num_ipus',
                                        type=int,
                                        default=1,
-                                       help='Number ipus')
+                                       help='Number of IPUs.')
   parser_convert_with_ipu.add_argument('--precision_mode',
                                        type=str,
                                        default=None,
                                        action='store',
-                                       help='the precision of output model')
+                                       help='The precision of output model.')
   parser_convert_with_ipu.add_argument(
       '--no_ipu_placement',
       action='store_true',
-      help='if set, will not do ipu placement')
+      help='If set, will not do IPU placement.')
   parser_convert_with_ipu.add_argument(
       '--precision_conversion_excluded_nodes',
       type=str,
       nargs='+',
       default=[],
-      help='ops that will not have their precision changed by --precision_mode'
+      help='Ops that will not have their precision changed by --precision_mode.'
   )
+  parser_convert_with_ipu.add_argument(
+      '--remove_excluded_nodes',
+      action='store_true',
+      default=False,
+      help='Remove nodes in excluded_nodes from graph.')
+
   parser_convert_with_ipu.add_argument(
       '--manual_sharding',
       action='store',
@@ -156,7 +163,7 @@ def create_parser():
                                        type=str,
                                        default=None,
                                        action="store",
-                                       help='config file path (json format).')
+                                       help='Config file path (JSON format).')
 
   parser_convert_with_ipu.set_defaults(func=convert_with_ipu)
 

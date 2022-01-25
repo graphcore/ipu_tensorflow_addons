@@ -14,9 +14,16 @@
 # ==============================================================================
 """Test for IPUPlacement Converter"""
 
-import numpy as np
-import tensorflow.compat.v1 as tf
+import copy
+import re
+import numpy
+
+from tensorflow import disable_v2_behavior
+from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import variable_scope
+
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuConversionParams
@@ -24,18 +31,18 @@ from ipu_tensorflow_addons.saved_model_tool.converter import IPUPlacement
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import \
     ModelForTest
 
-tf.disable_v2_behavior()
+disable_v2_behavior()
 
 
 class TestSavedmodel(ModelForTest):
   def create(self):
-    x = tf.placeholder(np.float32, [8, 8], name="x")
+    x = array_ops.placeholder(numpy.float32, [8, 8], name="x")
 
-    w0 = tf.get_variable("w0", shape=[8, 8], dtype=tf.float32)
-    x = tf.matmul(w0, x)
+    w0 = variable_scope.get_variable("w0", shape=[8, 8], dtype=dtypes.float32)
+    x = math_ops.matmul(w0, x)
 
-    w1 = tf.get_variable("w1", shape=[8, 8], dtype=tf.float32)
-    x = tf.matmul(w1, x)
+    w1 = variable_scope.get_variable("w1", shape=[8, 8], dtype=dtypes.float32)
+    x = math_ops.matmul(w1, x)
     y = math_ops.reduce_sum(x)
     return y
 
@@ -58,7 +65,8 @@ class IpuPlacementTestCase(test_util.TensorFlowTestCase):
     return True
 
   def test_ipu_placement(self):
-    # check node with ipu placement
+    # Check node with IPU placement.
+
     params = IpuConversionParams()
     converter = IPUPlacement(params)
     graph_def, _ = converter.apply(self.test_graph_def,
@@ -73,7 +81,8 @@ class IpuPlacementTestCase(test_util.TensorFlowTestCase):
       self.assertTrue(self._check_ipu_placement(node))
 
   def test_no_ipu_placement(self):
-    # check node without ipu placement
+    # Check node without IPU placement.
+
     params = IpuConversionParams(ipu_placement=False)
     converter = IPUPlacement(params)
     graph_def, _ = converter.apply(self.test_graph_def,
@@ -87,9 +96,7 @@ class IpuPlacementTestCase(test_util.TensorFlowTestCase):
       self.assertFalse(self._check_ipu_placement(node))
 
   def test_excluded_nodes(self):
-    excluded_nodes = [
-        '^MatMul$',
-    ]
+    excluded_nodes = ['^MatMul$', '^w0']
     params = IpuConversionParams(excluded_nodes=excluded_nodes)
     converter = IPUPlacement(params)
     graph_def, _ = converter.apply(self.test_graph_def,
@@ -99,10 +106,21 @@ class IpuPlacementTestCase(test_util.TensorFlowTestCase):
     for node in graph_def.node:
       if node.op == 'Placeholder':
         continue
-      if node.name == 'MatMul':
+      if any(re.search(pattern, node.name) for pattern in excluded_nodes):
         self.assertFalse(self._check_ipu_placement(node))
       else:
         self.assertTrue(self._check_ipu_placement(node))
+
+  def test_incomplete_cpu_header(self):
+    graph_def = copy.deepcopy(self.test_graph_def)
+    signature_def = copy.deepcopy(self.test_signature_def)
+
+    excluded_nodes = ['^MatMul$']
+    params = IpuConversionParams(excluded_nodes=excluded_nodes,
+                                 remove_excluded_nodes=True)
+
+    self.assertRaises(ValueError,
+                      IPUPlacement(params).apply, graph_def, signature_def)
 
 
 if __name__ == '__main__':

@@ -38,7 +38,7 @@ from tensorflow.python.saved_model import tag_constants
 from ipu_tensorflow_addons.saved_model_tool.converter import ConverterPipeline
 
 if platform.system() == "Windows":
-  raise RuntimeError("Windows platform is not supported")
+  raise RuntimeError("Windows platform is not supported.")
 
 
 class IpuConversionParams(object):
@@ -49,6 +49,7 @@ class IpuConversionParams(object):
     - **excluded_nodes** - list of node names to prevent the converter from touching.
     - **num_ipus** - number ipus to run the model.
     - **ipu_placement** - do ipu placement or not.
+    - **remove_excluded_nodes** - remove nodes in cpu graph.
     - **manual_sharding** - specify regular expressions to control which nodes will be sharded.
   """
 
@@ -58,6 +59,7 @@ class IpuConversionParams(object):
                num_ipus=1,
                ipu_placement=True,
                precision_mode=None,
+               remove_excluded_nodes=False,
                precision_conversion_excluded_nodes=None,
                manual_sharding=None):
     self.excluded_nodes = excluded_nodes
@@ -65,6 +67,7 @@ class IpuConversionParams(object):
     self.ipu_placement = ipu_placement
     self.pb_md5sum = None
     self.precision_mode = precision_mode
+    self.remove_excluded_nodes = remove_excluded_nodes
     self.precision_conversion_excluded_nodes = (
         precision_conversion_excluded_nodes)
     self.manual_sharding = manual_sharding
@@ -91,6 +94,9 @@ class IpuConversionParams(object):
         config["precision_conversion_excluded_nodes"], list):
       self.precision_conversion_excluded_nodes = config[
           "precision_conversion_excluded_nodes"]
+    if "remove_excluded_nodes" in config and isinstance(
+        config["remove_excluded_nodes"], bool):
+      self.remove_excluded_nodes = bool(config["remove_excluded_nodes"])
 
     if ("manual_sharding" in config
         and isinstance(config["manual_sharding"], list)):
@@ -104,6 +110,7 @@ class IpuConversionParams(object):
     config = {}
     config["num_ipus"] = self.num_ipus
     config["no_ipu_placement"] = True if self.ipu_placement is False else False
+    config["remove_excluded_nodes"] = self.remove_excluded_nodes
     if self.precision_mode:
       config["precision_mode"] = self.precision_mode
     config["md5sum"] = self.pb_md5sum
@@ -131,18 +138,20 @@ def _check_conversion_params(conversion_params: IpuConversionParams):
   """
   if not isinstance(conversion_params.num_ipus,
                     int) or conversion_params.num_ipus <= 0:
-    raise ValueError("num_ipus should be an integer, and greater than 0")
+    raise ValueError("num_ipus should be an integer, and greater than 0.")
 
   if conversion_params.excluded_nodes is not None:
     if not isinstance(conversion_params.excluded_nodes, list):
-      raise ValueError("excluded_nodes should be a list")
+      raise ValueError("excluded_nodes should be a list.")
 
   if not isinstance(conversion_params.ipu_placement, bool):
-    raise ValueError("ipu_placement should be True or False")
+    raise ValueError("ipu_placement should be True or False.")
+  if not isinstance(conversion_params.remove_excluded_nodes, bool):
+    raise ValueError("remove_excluded_nodes should be True or False.")
 
   if conversion_params.manual_sharding is not None:
     if not isinstance(conversion_params.manual_sharding, list):
-      raise ValueError("manual_sharding should be a list of lists of strings")
+      raise ValueError("manual_sharding should be a list of lists of strings.")
 
     for reg_list in conversion_params.manual_sharding:
       if not isinstance(reg_list, list):
@@ -187,14 +196,14 @@ class IpuGraphConverter(object):
 
     if input_meta_graph_def and input_saved_model_dir:
       raise ValueError(
-          "Can only specify one of input_meta_graph_def and input_saved_model_dir"
+          "Can only specify one of input_meta_graph_def and input_saved_model_dir."
       )
     if not input_meta_graph_def and not input_saved_model_dir:
       raise ValueError("Must specify one of input_meta_graph_def and "
-                       "input_saved_model_dir")
+                       "input_saved_model_dir.")
     if input_meta_graph_def and not input_sess:
       raise ValueError(
-          "Must specify input_sess when specify input_meta_graph_def")
+          "Must specify input_sess when specify input_meta_graph_def.")
 
     self._input_meta_graph_def = input_meta_graph_def
     self._input_sess = input_sess
@@ -323,6 +332,7 @@ def create_inference_graph(input_saved_model_dir=None,
                            excluded_nodes=None,
                            num_ipus=1,
                            ipu_placement=True,
+                           remove_excluded_nodes=False,
                            precision_conversion_excluded_nodes=None,
                            precision_mode=None,
                            manual_sharding=None,
@@ -357,6 +367,7 @@ def create_inference_graph(input_saved_model_dir=None,
       excluded_nodes=excluded_nodes,
       num_ipus=num_ipus,
       ipu_placement=ipu_placement,
+      remove_excluded_nodes=remove_excluded_nodes,
       precision_conversion_excluded_nodes=precision_conversion_excluded_nodes,
       precision_mode=precision_mode,
       manual_sharding=manual_sharding)

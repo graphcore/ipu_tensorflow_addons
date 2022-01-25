@@ -146,7 +146,6 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
                                    converted_model_path)
       graph_def = meta_graph_def.graph_def
       node_names = [node.name for node in graph_def.node]
-      self.assertEqual(len(graph_def.node), 3)
       self.assertTrue('add' in node_names)
 
       for node in graph_def.node:
@@ -156,6 +155,27 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
           self.assertTrue(node.device != '/device:IPU:0')
         else:
           self.assertTrue(node.device == '/device:IPU:0')
+
+  def testConvertWithRemovedNodes(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(test.get_temp_dir(),
+                                        'removed_savedmodel')
+    convert_args = parser.parse_args([
+        'convert', '--dir', self.model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--excluded_nodes', '^add$', '--remove_excluded_nodes'
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_dict = {node.name: node for node in graph_def.node}
+      self.assertTrue('Placeholder' not in node_dict)
+      self.assertTrue('add' in node_dict)
+      self.assertTrue('mul' in node_dict)
+      self.assertTrue(node_dict['add'].op == 'Placeholder')
+      self.assertTrue(node_dict['mul'].device == '/device:IPU:0')
 
   def testConvertWithNoIpuPlacement(self):
     parser = saved_model_cli.create_parser()
@@ -241,7 +261,7 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
   def testConvertWithConfigFile(self):
     cfg_data = {
         "excluded_nodes": [
-            "^mul$",
+            "^add",
         ]
     }
     cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
@@ -270,13 +290,54 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
                                    converted_model_path)
       graph_def = meta_graph_def.graph_def
       node_names = [node.name for node in graph_def.node]
-      self.assertEqual(len(graph_def.node), 3)
-      self.assertTrue('mul' in node_names)
+      self.assertTrue('add' in node_names)
 
       for node in graph_def.node:
         if node.op == 'Placeholder':
           continue
-        if node.name == 'mul':
+        if node.name == 'add':
+          self.assertTrue(node.device != '/device:IPU:0')
+        else:
+          self.assertTrue(node.device == '/device:IPU:0')
+
+  def testIPUCompilerWrapperWithConfigFile(self):
+    cfg_data = {
+        "excluded_nodes": [
+            "^add",
+        ],
+        "remove_excluded_nodes": True
+    }
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
+
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_names = [node.name for node in graph_def.node]
+      print(node_names)
+      self.assertTrue('mul' in node_names)
+
+      for node in graph_def.node:
+        if node.name in ['add', 'Placeholder']:
           self.assertTrue(node.device != '/device:IPU:0')
         else:
           self.assertTrue(node.device == '/device:IPU:0')
