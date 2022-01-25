@@ -115,7 +115,7 @@ elif [ ! -z "${TF_POPLAR_SANDBOX}" ]; then
   if [ -f "${TF_POPLAR_SANDBOX}/poplar/bin/popc" ]; then
     echo "OK: TF_POPLAR_SANDBOX is set to $TF_POPLAR_SANDBOX"
     # Add Poplar to PATH.
-    source ${TF_POPLAR_SANDBOX}/poplar/enable.sh
+    source ${TF_POPLAR_SANDBOX}/../activate.sh
   else
     echo "ERROR: TF_POPLAR_SANDBOX is set to an invalid path: ${TF_POPLAR_SANDBOX}/poplar/bin/popc doesn't exist"
     exit 1
