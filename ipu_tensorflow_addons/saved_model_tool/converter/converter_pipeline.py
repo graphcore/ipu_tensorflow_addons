@@ -19,6 +19,7 @@ from ipu_tensorflow_addons.saved_model_tool.converter import IPUPlacement
 from ipu_tensorflow_addons.saved_model_tool.converter import PrecisionConversion
 from ipu_tensorflow_addons.saved_model_tool.converter import IPUCompilerWrapper
 from ipu_tensorflow_addons.saved_model_tool.converter import ManualSharding
+from ipu_tensorflow_addons.saved_model_tool.converter import Int64Conversion
 
 
 class ConverterPipeline():
@@ -26,6 +27,7 @@ class ConverterPipeline():
   def __init__(self, param, signatrue_key):
     self._converters = list()
     self._converters.append(IPUPlacement(param))
+    self._converters.append(Int64Conversion(param))
     self._converters.append(PrecisionConversion(param))
     self._converters.append(IPUCompilerWrapper(param))
     self._converters.append(ManualSharding(param))

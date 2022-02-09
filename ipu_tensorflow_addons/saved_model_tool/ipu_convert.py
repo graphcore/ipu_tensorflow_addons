@@ -55,6 +55,7 @@ class IpuConversionParams(object):
     - **gelu_replacement['node_as_gelu_input']** - a list of the nodes which are inputs to the gelu.
     - **gelu_replacement['node_use_gelu_output']** - a list of the nodes with the gelu as an input.
     - **manual_sharding** - specify regular expressions to control which nodes will be sharded.
+    - **int64_to_int32_conversion** - do int64 conversion or not.
   """
 
   # pylint:enable=line-too-long
@@ -66,7 +67,8 @@ class IpuConversionParams(object):
                remove_excluded_nodes=False,
                gelu_replacement=None,
                precision_conversion_excluded_nodes=None,
-               manual_sharding=None):
+               manual_sharding=None,
+               int64_to_int32_conversion=True):
     self.excluded_nodes = excluded_nodes
     self.num_ipus = num_ipus
     self.ipu_placement = ipu_placement
@@ -77,6 +79,7 @@ class IpuConversionParams(object):
     self.precision_conversion_excluded_nodes = (
         precision_conversion_excluded_nodes)
     self.manual_sharding = manual_sharding
+    self.int64_to_int32_conversion = int64_to_int32_conversion
 
   def load_from_json_file(self, config_file):
     if not os.access(config_file, os.R_OK):
@@ -112,6 +115,11 @@ class IpuConversionParams(object):
         and isinstance(config["manual_sharding"], list)):
       self.manual_sharding = config["manual_sharding"]
 
+    if "int64_to_int32_conversion" in config and isinstance(
+        config["int64_to_int32_conversion"], bool):
+      self.int64_to_int32_conversion = bool(
+          config["int64_to_int32_conversion"])
+
   def save_to_json_file(self, directory):
     if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
       raise ValueError(
@@ -131,6 +139,8 @@ class IpuConversionParams(object):
 
     if self.manual_sharding:
       config["manual_sharding"] = self.manual_sharding
+    if self.int64_to_int32_conversion:
+      config["int64_to_int32_conversion"] = self.int64_to_int32_conversion
 
     config_file_path = os.path.join(directory, 'conversion_params.json')
     with open(config_file_path, 'w') as fp:
@@ -373,6 +383,7 @@ def create_inference_graph(input_saved_model_dir=None,
                            precision_conversion_excluded_nodes=None,
                            precision_mode=None,
                            manual_sharding=None,
+                           int64_to_int32_conversion=True,
                            config_file=None):
   """Python wrapper for the IPU transformation.
 
@@ -407,7 +418,8 @@ def create_inference_graph(input_saved_model_dir=None,
       remove_excluded_nodes=remove_excluded_nodes,
       precision_conversion_excluded_nodes=precision_conversion_excluded_nodes,
       precision_mode=precision_mode,
-      manual_sharding=manual_sharding)
+      manual_sharding=manual_sharding,
+      int64_to_int32_conversion=int64_to_int32_conversion)
 
   if config_file:
     conversion_params.load_from_json_file(config_file)

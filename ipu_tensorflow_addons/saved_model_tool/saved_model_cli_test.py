@@ -35,8 +35,25 @@ from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 from tensorflow.compiler.xla import xla_data_pb2
 from tensorflow.core.framework import attr_value_pb2
+from tensorflow.core.framework import types_pb2
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
+
+
+class SavedModelCLITestModelInt64(ModelForTest):
+  def create(self):
+    """
+    Create a simple SavedModel on the fly.
+    t = x + x
+    y = t * t
+    return y
+
+    Placeholder -> AddV2 -> Mul
+    """
+    in_tensor = array_ops.placeholder(shape=[1], dtype=dtypes.int64, name="x")
+    tmp_tensor = in_tensor + in_tensor
+    out_tensor = tmp_tensor * tmp_tensor
+    return out_tensor
 
 
 class SavedModelCLITestModel(ModelForTest):
@@ -61,6 +78,7 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
   def setUp(self):
     super().setUp()
     self.model = SavedModelCLITestModel(freeze=True, save=True)
+    self.model_int64 = SavedModelCLITestModelInt64(freeze=True, save=True)
 
   def testRunCommandInputExprs(self):
     parser = saved_model_cli.create_parser()
@@ -465,6 +483,60 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
         if 'mul' in node.name:
           self.assertFalse(check_sharding_num(node, 1))
           self.assertFalse(check_sharding_num(node, 0))
+
+  def testConvertWithNoInt64Conversion(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model_int64.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--int64_to_int32_conversion',
+        False,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      self.assertEqual(len(graph_def.node), 3)
+      for node in graph_def.node:
+        for _attr in node.attr:
+          if _attr in ['T', 'dtype'] and node.attr[_attr].type:
+            self.assertTrue(node.attr[_attr].type == types_pb2.DT_INT64)
+
+  def testConvertWithInt64Conversion(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model_int64.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      self.assertEqual(len(graph_def.node), 3)
+      for node in graph_def.node:
+        for _attr in node.attr:
+          if _attr in ['T', 'dtype'] and node.attr[_attr].type:
+            self.assertTrue(node.attr[_attr].type != types_pb2.DT_INT64)
 
 
 def check_sharding_num(node, index):

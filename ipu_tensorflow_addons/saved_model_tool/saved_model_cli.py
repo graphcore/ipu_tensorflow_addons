@@ -68,6 +68,7 @@ def convert_with_ipu(args):
       excluded_nodes=args.excluded_nodes,
       num_ipus=args.num_ipus,
       ipu_placement=not bool(args.no_ipu_placement),
+      int64_to_int32_conversion=bool(args.int64_to_int32_conversion),
       remove_excluded_nodes=bool(args.remove_excluded_nodes),
       precision_conversion_excluded_nodes=(
           args.precision_conversion_excluded_nodes),
@@ -136,6 +137,11 @@ def create_parser():
       '--no_ipu_placement',
       action='store_true',
       help='If set, will not do IPU placement.')
+  parser_convert_with_ipu.add_argument(
+      '--int64_to_int32_conversion',
+      type=bool,
+      default=True,
+      help='Convert nodes with int64 type to int32 type.')
   parser_convert_with_ipu.add_argument(
       '--precision_conversion_excluded_nodes',
       type=str,
