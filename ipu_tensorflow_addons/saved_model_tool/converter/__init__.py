@@ -19,3 +19,4 @@ from ipu_tensorflow_addons.saved_model_tool.converter.ipu_placement import IPUPl
 from ipu_tensorflow_addons.saved_model_tool.converter.precision_conversion import PrecisionConversion
 from ipu_tensorflow_addons.saved_model_tool.converter.manual_shard import ManualSharding
 from ipu_tensorflow_addons.saved_model_tool.converter.converter_pipeline import ConverterPipeline
+from ipu_tensorflow_addons.saved_model_tool.converter.gelu_replacement import GeluReplacement

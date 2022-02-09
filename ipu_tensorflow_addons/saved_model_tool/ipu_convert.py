@@ -50,6 +50,10 @@ class IpuConversionParams(object):
     - **num_ipus** - number ipus to run the model.
     - **ipu_placement** - do ipu placement or not.
     - **remove_excluded_nodes** - remove nodes in cpu graph.
+    - **gelu_replacement** - specify a gelu info dict to do gelu replacement or not.
+    - **gelu_replacement['nodes']** - a list describing the nodes in the gelu function.
+    - **gelu_replacement['node_as_gelu_input']** - a list of the nodes which are inputs to the gelu.
+    - **gelu_replacement['node_use_gelu_output']** - a list of the nodes with the gelu as an input.
     - **manual_sharding** - specify regular expressions to control which nodes will be sharded.
   """
 
@@ -60,6 +64,7 @@ class IpuConversionParams(object):
                ipu_placement=True,
                precision_mode=None,
                remove_excluded_nodes=False,
+               gelu_replacement=None,
                precision_conversion_excluded_nodes=None,
                manual_sharding=None):
     self.excluded_nodes = excluded_nodes
@@ -68,6 +73,7 @@ class IpuConversionParams(object):
     self.pb_md5sum = None
     self.precision_mode = precision_mode
     self.remove_excluded_nodes = remove_excluded_nodes
+    self.gelu_replacement = gelu_replacement
     self.precision_conversion_excluded_nodes = (
         precision_conversion_excluded_nodes)
     self.manual_sharding = manual_sharding
@@ -98,6 +104,10 @@ class IpuConversionParams(object):
         config["remove_excluded_nodes"], bool):
       self.remove_excluded_nodes = bool(config["remove_excluded_nodes"])
 
+    if "gelu_replacement" in config and isinstance(config["gelu_replacement"],
+                                                   dict):
+      self.gelu_replacement = config["gelu_replacement"]
+
     if ("manual_sharding" in config
         and isinstance(config["manual_sharding"], list)):
       self.manual_sharding = config["manual_sharding"]
@@ -117,6 +127,7 @@ class IpuConversionParams(object):
     config["excluded_nodes"] = self.excluded_nodes
     config["precision_conversion_excluded_nodes"] = (
         self.precision_conversion_excluded_nodes)
+    config['gelu_replacement'] = self.gelu_replacement
 
     if self.manual_sharding:
       config["manual_sharding"] = self.manual_sharding
@@ -148,6 +159,32 @@ def _check_conversion_params(conversion_params: IpuConversionParams):
     raise ValueError("ipu_placement should be True or False.")
   if not isinstance(conversion_params.remove_excluded_nodes, bool):
     raise ValueError("remove_excluded_nodes should be True or False.")
+
+  if conversion_params.gelu_replacement is not None:
+    if not isinstance(conversion_params.gelu_replacement, dict):
+      raise ValueError("gelu_replacement should be a dict.")
+    gelu_missing_keys = [
+        key for key in ("nodes", "node_as_gelu_input", "node_use_gelu_output")
+        if key not in conversion_params.gelu_replacement
+    ]
+    if gelu_missing_keys:
+      raise ValueError(
+          f"Missing items from gelu: {gelu_missing_keys}. "
+          "gelu must be a dictionary containing the following items { "
+          "'nodes': the node name of the gelu, "
+          "'node_as_gelu_input': the node in front of the gelu function, "
+          "'node_use_gelu_output': the node at the back of gelu function }.")
+    else:
+      if not isinstance(conversion_params.gelu_replacement['nodes'], list):
+        raise ValueError("gelu_replacement['nodes'] should be a list.")
+      if not isinstance(
+          conversion_params.gelu_replacement['node_as_gelu_input'], list):
+        raise ValueError(
+            "gelu_replacement['node_as_gelu_input'] should be a list.")
+      if not isinstance(
+          conversion_params.gelu_replacement['node_use_gelu_output'], list):
+        raise ValueError(
+            "gelu_replacement['node_use_gelu_output'] should be a list.")
 
   if conversion_params.manual_sharding is not None:
     if not isinstance(conversion_params.manual_sharding, list):

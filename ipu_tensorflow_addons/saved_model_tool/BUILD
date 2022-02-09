@@ -7,6 +7,7 @@ py_library(
         "converter/__init__.py",
         "converter/converter.py",
         "converter/converter_pipeline.py",
+        "converter/gelu_replacement.py",
         "converter/ipu_compiler_wrapper.py",
         "converter/ipu_placement.py",
         "converter/manual_shard.py",
@@ -54,6 +55,17 @@ py_test(
     name = "ipu_compiler_wrapper_test",
     srcs = [
         "converter/ipu_compiler_wrapper_test.py",
+        "saved_model_test_utils.py",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
+    name = "gelu_replacement_test",
+    srcs = [
+        "converter/gelu_replacement_test.py",
         "saved_model_test_utils.py",
     ],
     deps = [
