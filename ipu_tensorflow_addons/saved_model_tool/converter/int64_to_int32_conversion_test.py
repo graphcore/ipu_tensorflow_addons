@@ -52,7 +52,7 @@ class LongIntConvertTestCase(test_util.TensorFlowTestCase):
     self._ATTR_TYPE_ = ["T", 'SrcT', 'DstT', 'Tindices', 'TI', 'dtype']
 
   def test_longint_convert(self):
-    params = IpuConversionParams()
+    params = IpuConversionParams(int64_to_int32_conversion=True)
     graph_def, _ = Int64Conversion(params).apply(self.test_graph_def,
                                                  self.test_signature_def)
     for node in graph_def.node:

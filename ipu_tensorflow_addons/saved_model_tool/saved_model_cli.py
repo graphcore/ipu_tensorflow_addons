@@ -21,7 +21,9 @@ Command-line interface to convert and execute a graph in a SavedModel on IPU.
 
 import ast
 import sys
+import textwrap
 import argparse
+import json
 from tensorflow.python.tools import saved_model_cli as cli
 from tensorflow.python.ipu.config import IPUConfig
 from ipu_tensorflow_addons.saved_model_tool import ipu_convert
@@ -35,6 +37,9 @@ def _init_ipu(args):
   cfg.convolutions.poplar_options = {
       "availableMemoryProportion": args.conv_amp
   }
+  cfg.matmuls.poplar_options.update({"partialsType": args.matmul_partial_type})
+  cfg.convolutions.poplar_options.update(
+      {"partialsType": args.conv_partial_type})
   cfg.configure_ipu_system()
 
 
@@ -61,12 +66,18 @@ def convert_with_ipu(args):
     args: A namespace parsed from command line.
   """
   ipu_convert.create_inference_graph(
+      batch_size=args.batch_size,
       input_saved_model_dir=args.dir,
       input_saved_model_tags=args.tag_set.split(','),
       input_saved_model_signature_key=None,
       output_saved_model_dir=args.output_dir,
       excluded_nodes=args.excluded_nodes,
       num_ipus=args.num_ipus,
+      batch_per_step=args.batch_per_step,
+      matmul_amp=args.matmul_amp,
+      conv_amp=args.conv_amp,
+      matmul_partial_type=args.matmul_partial_type,
+      conv_partial_type=args.conv_partial_type,
       ipu_placement=not bool(args.no_ipu_placement),
       int64_to_int32_conversion=bool(args.int64_to_int32_conversion),
       remove_excluded_nodes=bool(args.remove_excluded_nodes),
@@ -75,11 +86,15 @@ def convert_with_ipu(args):
       manual_sharding=args.manual_sharding,
       config_file=args.config_file,
       precision_mode=args.precision_mode,
-  )
+      embedded_runtime_save_config=args.embedded_runtime_save_config)
 
 
 def list_of_lists_str(strs):
   return ast.literal_eval(strs)
+
+
+def json_dict(strs):
+  return json.loads(strs)
 
 
 def create_parser():
@@ -110,6 +125,14 @@ def create_parser():
                           type=str,
                           default='0.6',
                           help='AvailableMemoryProportion for convolution.')
+  parser_run.add_argument('--matmul_partial_type',
+                          type=str,
+                          default='float',
+                          help='Partial type for matmul.')
+  parser_run.add_argument('--conv_partial_type',
+                          type=str,
+                          default='float',
+                          help='Partial type for convolution.')
   parser_run.set_defaults(func=run)
 
   # Add an `ipu` choice to the "conversion methods" subparsers
@@ -128,6 +151,36 @@ def create_parser():
                                        type=int,
                                        default=1,
                                        help='Number of IPUs.')
+  parser_convert_with_ipu.add_argument(
+      '--matmul_amp',
+      type=float,
+      default='0.6',
+      help='AvailableMemoryProportion for matmul.')
+  parser_convert_with_ipu.add_argument(
+      '--conv_amp',
+      type=float,
+      default='0.6',
+      help='AvailableMemoryProportion for convolution.')
+  parser_convert_with_ipu.add_argument('--matmul_partial_type',
+                                       type=str,
+                                       default='float',
+                                       help='Partial type for matmul.')
+  parser_convert_with_ipu.add_argument('--conv_partial_type',
+                                       type=str,
+                                       default='float',
+                                       help='Partial type for convolution.')
+  parser_convert_with_ipu.add_argument('--batch_size',
+                                       type=int,
+                                       default=1,
+                                       help='Batch size.')
+  parser_convert_with_ipu.add_argument(
+      '--batch_per_step',
+      type=int,
+      default=0,
+      help=("Repeat count for `loop.repeat` or `pipelining_op`. "
+            "If 0, it will not turn off the loop repeat IPU wrapper. "
+            "If embedded application runtime is enabled and "
+            "Batch_per_step is 0, it will be changed to 1."))
   parser_convert_with_ipu.add_argument('--precision_mode',
                                        type=str,
                                        default=None,
@@ -139,8 +192,8 @@ def create_parser():
       help='If set, will not do IPU placement.')
   parser_convert_with_ipu.add_argument(
       '--int64_to_int32_conversion',
-      type=bool,
-      default=True,
+      action="store_true",
+      default=False,
       help='Convert nodes with int64 type to int32 type.')
   parser_convert_with_ipu.add_argument(
       '--precision_conversion_excluded_nodes',
@@ -154,6 +207,11 @@ def create_parser():
       action='store_true',
       default=False,
       help='Remove nodes in excluded_nodes from graph.')
+  parser_convert_with_ipu.add_argument(
+      '--merge_subgraphs',
+      action='store_true',
+      default=False,
+      help='Merge multiple IPU subgraphs into one with `ipu compile` API.')
 
   parser_convert_with_ipu.add_argument(
       '--manual_sharding',
@@ -165,12 +223,22 @@ def create_parser():
           " Nodes who's names match the expressions for a given IPU"
           " will be sharded on that IPU."
           " Nodes which match no expressions will be placed on IPU0."))
+  parser_convert_with_ipu.add_argument(
+      '--embedded_runtime_save_config',
+      type=json_dict,
+      default=None,
+      help=('The configuration of embedded application runtime compilation, '
+            'a JSON like string e.g.\n') + textwrap.dedent("""\
+            {
+                "embedded_runtime_exec_cachedir": "/path/to/exec",
+                "runtime_api_timeout_us": 5000
+            }"""))
+
   parser_convert_with_ipu.add_argument('--config_file',
                                        type=str,
                                        default=None,
                                        action="store",
                                        help='Config file path (JSON format).')
-
   parser_convert_with_ipu.set_defaults(func=convert_with_ipu)
 
   parser_convert = parser._subparsers._group_actions[0].choices['convert']  # pylint: disable=W0212

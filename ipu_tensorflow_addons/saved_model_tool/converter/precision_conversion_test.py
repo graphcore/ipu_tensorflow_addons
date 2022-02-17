@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 import copy
+from itertools import chain
 
 from tensorflow import disable_v2_behavior
 from tensorflow.python.client import session
@@ -57,8 +58,8 @@ class PrecisionTestSavedModel(ModelForTest):
 class PrecisionConversionTestCase(test_util.TensorFlowTestCase):
   def setUp(self):
     self.model = PrecisionTestSavedModel(freeze=True)
-    self._graph_def, self._signature_def = \
-      self.model.graph_def, self.model.signature_def
+    self._graph_def, self._signature_def = (self.model.graph_def,
+                                            self.model.signature_def)
 
   def test_fp32_to_fp16(self):
     graph_def = copy.deepcopy(self._graph_def)
@@ -74,9 +75,14 @@ class PrecisionConversionTestCase(test_util.TensorFlowTestCase):
           for op in ops.get_default_graph().get_operations()
           for tensor in op.values()
       }
+      input_and_output_tensor_names = [
+          i.name for i in chain(self._signature_def.inputs.values(),
+                                self._signature_def.outputs.values())
+      ]
       FP32_tensor_name = [
           tensor.name for tensor in tensor_list
           if tensor.dtype == dtypes.float32
+          and tensor.name not in input_and_output_tensor_names
       ]
 
     with session.Session(graph=ops.Graph()):

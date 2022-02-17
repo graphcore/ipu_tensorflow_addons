@@ -11,6 +11,7 @@ py_library(
         "converter/int64_to_int32_conversion.py",
         "converter/ipu_compiler_wrapper.py",
         "converter/ipu_placement.py",
+        "converter/loop_repeat_wrapper.py",
         "converter/manual_shard.py",
         "converter/precision_conversion.py",
         "converter/utils.py",
@@ -53,6 +54,19 @@ py_test(
 )
 
 py_test(
+    name = "loop_repeat_wrapper_test",
+    srcs = [
+        "converter/loop_repeat_wrapper_test.py",
+        "saved_model_test_utils.py",
+    ],
+    tags = ["hw_poplar_test_2_ipus"],
+    deps = [
+        ":saved_model_tool",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
+)
+
+py_test(
     name = "int64_to_int32_conversion_test",
     srcs = [
         "converter/int64_to_int32_conversion_test.py",
@@ -91,8 +105,10 @@ py_test(
         "saved_model_cli_test.py",
         "saved_model_test_utils.py",
     ],
+    tags = ["hw_poplar_test_1_ipus"],
     deps = [
         ":saved_model_tool",
+        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 

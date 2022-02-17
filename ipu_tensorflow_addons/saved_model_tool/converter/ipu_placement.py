@@ -47,7 +47,7 @@ class IPUPlacement(Converter):
       if self._remove_excluded_nodes:
         ipu_graph_def, cpu_graph_def = split_graph_by_device_placement(
             graph_def)
-        edge_tensors = get_edge_tensor(cpu_graph_def, ipu_graph_def)
+        edge_tensors = get_edge_tensor(cpu_graph_def, ipu_graph_def, True)
         return self._do_remove_excluded_nodes(edge_tensors, signature_def,
                                               ipu_graph_def)
     return graph_def, signature_def

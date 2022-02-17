@@ -18,13 +18,14 @@ Keep the precision of nodes in precision_conversion_excluded_nodes
 """
 import re
 from collections import defaultdict
+from itertools import chain
 
 from tensorflow.python.framework import tensor_util
 from tensorflow.core.framework import types_pb2
 from tensorflow.core.framework import graph_pb2
 from ipu_tensorflow_addons.saved_model_tool.converter import Converter
 from ipu_tensorflow_addons.saved_model_tool.converter.utils import FLOAT_TYPE_LIST, ATTR_TYPE_LIST, NODES_TYPE_LIST, INPUT_NODES_TYPE_LIST
-from ipu_tensorflow_addons.saved_model_tool.converter.utils import str_to_dtype
+from ipu_tensorflow_addons.saved_model_tool.converter.utils import str_to_dtype, node_name_from_tensor_name
 
 
 class PrecisionConversion(Converter):
@@ -44,6 +45,10 @@ class PrecisionConversion(Converter):
     # For more details about tf.Node_def(), refer to https://www.tensorflow.org/api_docs/python/tf/compat/v1/NodeDef
     # and https://docs.graphcore.ai/projects/tensorflow1-user-guide/en/latest/supported_ops.html
     if self._precision_mode:
+      for tensor in chain(signature_def.inputs.values(),
+                          signature_def.outputs.values()):
+        if tensor.name:
+          self._skip_list.append(node_name_from_tensor_name(tensor.name))
       graph_def = self._convert_precision_mode(graph_def)
       graph_def = self._insert_cast(graph_def)
     return graph_def, signature_def
@@ -58,12 +63,12 @@ class PrecisionConversion(Converter):
       return True
     return False
 
-  def _tensor_name_to_node_name(self, tensor_name):
-    if ":" in tensor_name:
-      tensor_name = tensor_name.spilt(":")[0]
-    if "^" in tensor_name:
-      tensor_name = tensor_name.replace('^', '')
-    return tensor_name
+  # def _tensor_name_to_node_name(self, tensor_name):
+  #   if ":" in tensor_name:
+  #     tensor_name = tensor_name.split(":")[0]
+  #   if "^" in tensor_name:
+  #     tensor_name = tensor_name.replace('^', '')
+  #   return tensor_name
 
   def _convert_precision_mode(self, graph_def):
     dst_dtype = str_to_dtype(self._precision_mode)
@@ -105,7 +110,7 @@ class PrecisionConversion(Converter):
         if node.attr[attr].type and attr in NODES_TYPE_LIST:
           self_type = node.attr[attr].type
       for idx, input_name in enumerate(node.input):
-        input_node = node_dict[self._tensor_name_to_node_name(input_name)]
+        input_node = node_dict[node_name_from_tensor_name(input_name)]
         for attr in input_node.attr:
           if input_node.attr[attr].type and attr in INPUT_NODES_TYPE_LIST:
             input_type = input_node.attr[attr].type

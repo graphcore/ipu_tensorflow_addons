@@ -20,6 +20,7 @@ from ipu_tensorflow_addons.saved_model_tool.converter import PrecisionConversion
 from ipu_tensorflow_addons.saved_model_tool.converter import IPUCompilerWrapper
 from ipu_tensorflow_addons.saved_model_tool.converter import ManualSharding
 from ipu_tensorflow_addons.saved_model_tool.converter import Int64Conversion
+from ipu_tensorflow_addons.saved_model_tool.converter import LoopRepeatWrapper
 
 
 class ConverterPipeline():
@@ -29,8 +30,9 @@ class ConverterPipeline():
     self._converters.append(IPUPlacement(param))
     self._converters.append(Int64Conversion(param))
     self._converters.append(PrecisionConversion(param))
-    self._converters.append(IPUCompilerWrapper(param))
     self._converters.append(ManualSharding(param))
+    self._converters.append(IPUCompilerWrapper(param))
+    self._converters.append(LoopRepeatWrapper(param))
 
   def ApplyConverters(self, graph_def, signature_def):
     for converter in self._converters:

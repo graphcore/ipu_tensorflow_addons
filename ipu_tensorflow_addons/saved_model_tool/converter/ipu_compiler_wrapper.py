@@ -25,23 +25,31 @@ from tensorflow.python.framework import graph_util
 from tensorflow.python.framework import importer
 from ipu_tensorflow_addons.saved_model_tool.converter.converter import Converter
 from ipu_tensorflow_addons.saved_model_tool.converter.utils import add_ipu_scope, get_edge_tensor, split_graph_by_device_placement
-from ipu_tensorflow_addons.saved_model_tool.converter.utils import tensor_name_to_node_name, input_name_to_node_name
+from ipu_tensorflow_addons.saved_model_tool.converter.utils import node_name_from_tensor_name, input_name_to_node_name
 
 
 class IPUCompilerWrapper(Converter):
   def __init__(self, param):
-    if param.excluded_nodes is None:
-      self._excluded_nodes = list()
-    elif not isinstance(param.excluded_nodes, list):
-      raise ValueError("excluded_nodes must be a list.")
-    else:
-      self._excluded_nodes = param.excluded_nodes
+    self._excluded_nodes = param.excluded_nodes
     self._remove_excluded_nodes = param.remove_excluded_nodes
+    self._merge_subgraphs = param.merge_subgraphs
+    self._embedded_runtime_save_config = param.embedded_runtime_save_config
+    self._validate_param(param)
+
+  def _validate_param(self, param):
+    if not isinstance(param.excluded_nodes, list):
+      raise TypeError("excluded_nodes must be a list.")
+
+    if not isinstance(param.remove_excluded_nodes, bool):
+      raise TypeError("remove_excluded_nodes must be a bool.")
+
+  def _should_do_ipu_wrapper(self):
+    return self._merge_subgraphs and not self._embedded_runtime_save_config
 
   def apply(self, graph_def, signature_def):
-    if (self._excluded_nodes and not self._remove_excluded_nodes):
+    if self._should_do_ipu_wrapper():
       ipu_graph_def, cpu_graph_def = split_graph_by_device_placement(graph_def)
-      edge_tensors = get_edge_tensor(cpu_graph_def, ipu_graph_def)
+      edge_tensors = get_edge_tensor(cpu_graph_def, ipu_graph_def, False)
       return self._wrap_graph_def(edge_tensors, signature_def, cpu_graph_def,
                                   ipu_graph_def)
     return graph_def, signature_def
@@ -79,7 +87,9 @@ class IPUCompilerWrapper(Converter):
     node_dict = {node.name: node for node in graph_def.node}
     output_tensor_name = [t.name for t in input_signature_def.outputs.values()]
     output_tensor_name.sort()
-    node_name_list = [tensor_name_to_node_name(t) for t in output_tensor_name]
+    node_name_list = [
+        node_name_from_tensor_name(t) for t in output_tensor_name
+    ]
     # Replace name in node's input with [name]/wrapped.
     for node in node_dict.values():
       for idx, input_name in enumerate(node.input):
@@ -97,7 +107,7 @@ class IPUCompilerWrapper(Converter):
     # To synchronize with signature.outputs, add new identity ops
     # behind the outputs created by _use_ipu_compiler.
     for idx, name in enumerate(output_tensor_name):
-      node_name = tensor_name_to_node_name(name)
+      node_name = node_name_from_tensor_name(name)
       node = node_dict["output" + str(idx)]
       new_indentity = graph_def.node.add()
       new_indentity.op = 'Identity'

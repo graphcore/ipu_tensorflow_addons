@@ -56,30 +56,51 @@ class IpuConversionParams(object):
     - **gelu_replacement['node_use_gelu_output']** - a list of the nodes with the gelu as an input.
     - **manual_sharding** - specify regular expressions to control which nodes will be sharded.
     - **int64_to_int32_conversion** - do int64 conversion or not.
+    - **batch_per_step** - repeat count for `loop.repeat` or `pipelining_op`.
+                           if 0, it will not turn off the loop repeat IPU wrapper.
+                           if embedded application runtime is enabled and batch_per_step is 0, it will be changed to 1.
+    - **embedded_runtime_save_config** - specify configuration for embedded application runtime. must be a dictionary.
   """
 
   # pylint:enable=line-too-long
   def __init__(self,
+               batch_size=1,
                excluded_nodes=None,
                num_ipus=1,
+               batch_per_step=0,
+               matmul_amp=0.6,
+               conv_amp=0.6,
+               matmul_partial_type='float',
+               conv_partial_type='float',
                ipu_placement=True,
                precision_mode=None,
                remove_excluded_nodes=False,
+               merge_subgraphs=False,
                gelu_replacement=None,
                precision_conversion_excluded_nodes=None,
                manual_sharding=None,
-               int64_to_int32_conversion=True):
+               int64_to_int32_conversion=False,
+               embedded_runtime_save_config=None):
     self.excluded_nodes = excluded_nodes
     self.num_ipus = num_ipus
+    self.batch_per_step = batch_per_step
+    self.matmul_amp = matmul_amp
+    self.conv_amp = conv_amp
+    self.matmul_partial_type = matmul_partial_type
+    self.conv_partial_type = conv_partial_type
     self.ipu_placement = ipu_placement
     self.pb_md5sum = None
     self.precision_mode = precision_mode
     self.remove_excluded_nodes = remove_excluded_nodes
+    self.merge_subgraphs = merge_subgraphs
     self.gelu_replacement = gelu_replacement
     self.precision_conversion_excluded_nodes = (
         precision_conversion_excluded_nodes)
     self.manual_sharding = manual_sharding
     self.int64_to_int32_conversion = int64_to_int32_conversion
+
+    self.batch_size = batch_size
+    self.embedded_runtime_save_config = embedded_runtime_save_config
 
   def load_from_json_file(self, config_file):
     if not os.access(config_file, os.R_OK):
@@ -90,22 +111,52 @@ class IpuConversionParams(object):
 
     if "num_ipus" in config and isinstance(config["num_ipus"], (int)):
       self.num_ipus = config["num_ipus"]
+
+    if "batch_size" in config and isinstance(config["batch_size"], (int)):
+      self.batch_size = config["batch_size"]
+
+    if "batch_per_step" in config and isinstance(config["batch_per_step"],
+                                                 int):
+      self.batch_per_step = config["batch_per_step"]
+
+    if "matmul_amp" in config and isinstance(config["matmul_amp"], float):
+      self.matmul_amp = config["matmul_amp"]
+
+    if "conv_amp" in config and isinstance(config["conv_amp"], float):
+      self.conv_amp = config["conv_amp"]
+
+    if "matmul_partial_type" in config and isinstance(
+        config["matmul_partial_type"], str):
+      self.matmul_partial_type = config["matmul_partial_type"]
+
+    if "conv_partial_type" in config and isinstance(
+        config["conv_partial_type"], str):
+      self.conv_partial_type = config["conv_partial_type"]
+
     if "no_ipu_placement" in config and isinstance(config["no_ipu_placement"],
                                                    bool):
       self.ipu_placement = not bool(config["no_ipu_placement"])
+
     if "excluded_nodes" in config and isinstance(config["excluded_nodes"],
                                                  list):
       self.excluded_nodes = config["excluded_nodes"]
+
     if "precision_mode" in config and isinstance(config["precision_mode"],
                                                  str):
       self.precision_mode = config["precision_mode"]
+
     if "precision_conversion_excluded_nodes" in config and isinstance(
         config["precision_conversion_excluded_nodes"], list):
       self.precision_conversion_excluded_nodes = config[
           "precision_conversion_excluded_nodes"]
+
     if "remove_excluded_nodes" in config and isinstance(
         config["remove_excluded_nodes"], bool):
       self.remove_excluded_nodes = bool(config["remove_excluded_nodes"])
+
+    if "merge_subgraphs" in config and isinstance(config["merge_subgraphs"],
+                                                  bool):
+      self.merge_subgraphs = bool(config["merge_subgraphs"])
 
     if "gelu_replacement" in config and isinstance(config["gelu_replacement"],
                                                    dict):
@@ -120,6 +171,11 @@ class IpuConversionParams(object):
       self.int64_to_int32_conversion = bool(
           config["int64_to_int32_conversion"])
 
+    if "embedded_runtime_save_config" in config and isinstance(
+        config["embedded_runtime_save_config"], dict):
+      self.embedded_runtime_save_config = config[
+          "embedded_runtime_save_config"]
+
   def save_to_json_file(self, directory):
     if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
       raise ValueError(
@@ -127,8 +183,15 @@ class IpuConversionParams(object):
 
     config = {}
     config["num_ipus"] = self.num_ipus
+    config["batch_size"] = self.batch_size
+    config["batch_per_step"] = self.batch_per_step
+    config["matmul_amp"] = self.matmul_amp
+    config["conv_amp"] = self.conv_amp
+    config["matmul_partial_type"] = self.matmul_partial_type
+    config["conv_partial_type"] = self.conv_partial_type
     config["no_ipu_placement"] = True if self.ipu_placement is False else False
     config["remove_excluded_nodes"] = self.remove_excluded_nodes
+    config["merge_subgraphs"] = self.merge_subgraphs
     if self.precision_mode:
       config["precision_mode"] = self.precision_mode
     config["md5sum"] = self.pb_md5sum
@@ -141,6 +204,10 @@ class IpuConversionParams(object):
       config["manual_sharding"] = self.manual_sharding
     if self.int64_to_int32_conversion:
       config["int64_to_int32_conversion"] = self.int64_to_int32_conversion
+
+    if self.embedded_runtime_save_config:
+      config[
+          "embedded_runtime_save_config"] = self.embedded_runtime_save_config
 
     config_file_path = os.path.join(directory, 'conversion_params.json')
     with open(config_file_path, 'w') as fp:
@@ -161,14 +228,21 @@ def _check_conversion_params(conversion_params: IpuConversionParams):
                     int) or conversion_params.num_ipus <= 0:
     raise ValueError("num_ipus should be an integer, and greater than 0.")
 
+  if not isinstance(conversion_params.batch_per_step, int):
+    raise TypeError("batch_per_step should be an integer.")
+
   if conversion_params.excluded_nodes is not None:
     if not isinstance(conversion_params.excluded_nodes, list):
-      raise ValueError("excluded_nodes should be a list.")
+      raise TypeError("excluded_nodes should be a list.")
 
   if not isinstance(conversion_params.ipu_placement, bool):
     raise ValueError("ipu_placement should be True or False.")
+
   if not isinstance(conversion_params.remove_excluded_nodes, bool):
     raise ValueError("remove_excluded_nodes should be True or False.")
+
+  if not isinstance(conversion_params.merge_subgraphs, bool):
+    raise ValueError("merge_subgraphs should be True or False.")
 
   if conversion_params.gelu_replacement is not None:
     if not isinstance(conversion_params.gelu_replacement, dict):
@@ -198,7 +272,7 @@ def _check_conversion_params(conversion_params: IpuConversionParams):
 
   if conversion_params.manual_sharding is not None:
     if not isinstance(conversion_params.manual_sharding, list):
-      raise ValueError("manual_sharding should be a list of lists of strings.")
+      raise TypeError("manual_sharding should be a list of lists of strings.")
 
     for reg_list in conversion_params.manual_sharding:
       if not isinstance(reg_list, list):
@@ -209,6 +283,10 @@ def _check_conversion_params(conversion_params: IpuConversionParams):
           raise TypeError(
               "manual_sharding must only contain lists of strings, "
               f"not lists of {type(str_type)}.")
+
+  if conversion_params.embedded_runtime_save_config is not None:
+    if not isinstance(conversion_params.embedded_runtime_save_config, dict):
+      raise TypeError("manual_sharding_config should be a dict.")
 
 
 class IpuGraphConverter(object):
@@ -372,19 +450,28 @@ class IpuGraphConverter(object):
     self._conversion_params.save_to_json_file(output_saved_model_dir)
 
 
-def create_inference_graph(input_saved_model_dir=None,
+def create_inference_graph(batch_size=1,
+                           input_saved_model_dir=None,
                            input_saved_model_tags=None,
                            input_saved_model_signature_key=None,
                            output_saved_model_dir=None,
                            excluded_nodes=None,
                            num_ipus=1,
+                           batch_per_step=0,
+                           matmul_amp=0.6,
+                           conv_amp=0.6,
+                           matmul_partial_type='float',
+                           conv_partial_type='float',
                            ipu_placement=True,
                            remove_excluded_nodes=False,
+                           merge_subgraphs=False,
                            precision_conversion_excluded_nodes=None,
                            precision_mode=None,
                            manual_sharding=None,
-                           int64_to_int32_conversion=True,
+                           int64_to_int32_conversion=False,
+                           embedded_runtime_save_config=None,
                            config_file=None):
+  # pylint:disable=line-too-long
   """Python wrapper for the IPU transformation.
 
   Args:
@@ -399,9 +486,14 @@ def create_inference_graph(input_saved_model_dir=None,
       input_saved_model_dir is specified and input_graph_def is None.
     excluded_nodes: list of node names to prevent the converter from touching.
     num_ipus: number ipus to run the model.
+    batch_per_step: the repeat count for `loop.repeat` or `pipelining_op`.
+                    if 0, it will not turn off the loop repeat ipu wrapper.
+                    if embedded application runtime is enabled and
+                    batch_per_step is 0, it will be changed to 1.
     ipu_placement: do ipu placement or not.
     manual_sharding: specify regular expressions to control
       which nodes will be sharded.
+    embedded_runtime_save_config: the directory configuration for embedded application runtime.
     config_file: config file path.
 
   Returns:
@@ -412,14 +504,22 @@ def create_inference_graph(input_saved_model_dir=None,
     ValueError: if the combination of the parameters is invalid.
   """
   conversion_params = IpuConversionParams(
+      batch_size=batch_size,
+      matmul_amp=matmul_amp,
+      conv_amp=conv_amp,
+      matmul_partial_type=matmul_partial_type,
+      conv_partial_type=conv_partial_type,
       excluded_nodes=excluded_nodes,
       num_ipus=num_ipus,
+      batch_per_step=batch_per_step,
       ipu_placement=ipu_placement,
       remove_excluded_nodes=remove_excluded_nodes,
+      merge_subgraphs=merge_subgraphs,
       precision_conversion_excluded_nodes=precision_conversion_excluded_nodes,
       precision_mode=precision_mode,
       manual_sharding=manual_sharding,
-      int64_to_int32_conversion=int64_to_int32_conversion)
+      int64_to_int32_conversion=int64_to_int32_conversion,
+      embedded_runtime_save_config=embedded_runtime_save_config)
 
   if config_file:
     conversion_params.load_from_json_file(config_file)

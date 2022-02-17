@@ -21,6 +21,7 @@ Tests for SavedModelCLI tool.
 
 import os
 import json
+import textwrap
 import numpy as np
 import tensorflow as tf
 
@@ -38,6 +39,21 @@ from tensorflow.core.framework import attr_value_pb2
 from tensorflow.core.framework import types_pb2
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
+from ipu_tensorflow_addons import test_utils as tu
+
+
+def check_sharding_num(node, index):
+  if '_XlaSharding' not in node.attr:
+    return False
+
+  proto = xla_data_pb2.OpSharding(type=xla_data_pb2.OpSharding.MAXIMAL,
+                                  tile_assignment_devices=[index])
+  attr_value = attr_value_pb2.AttrValue(s=proto.SerializeToString())
+
+  if node.attr['_XlaSharding'] != attr_value:
+    return False
+
+  return True
 
 
 class SavedModelCLITestModelInt64(ModelForTest):
@@ -74,11 +90,31 @@ class SavedModelCLITestModel(ModelForTest):
     return out_tensor
 
 
+class SavedModelCLIEmbeddedRuntimeTestModel(ModelForTest):
+  def create(self):
+    """
+    Create a simple SavedModel on the fly.
+    t = x + x
+    y = t * t
+    return y
+
+    Placeholder -> AddV2 -> Mul
+    """
+    in_tensor = array_ops.placeholder(shape=[None, 1],
+                                      dtype=dtypes.float32,
+                                      name="x")
+    tmp_tensor = in_tensor + in_tensor
+    out_tensor = tmp_tensor * tmp_tensor
+    return out_tensor
+
+
 class SavedModelCLITestCase(test_util.TensorFlowTestCase):
   def setUp(self):
     super().setUp()
     self.model = SavedModelCLITestModel(freeze=True, save=True)
     self.model_int64 = SavedModelCLITestModelInt64(freeze=True, save=True)
+    self.emb_model = SavedModelCLIEmbeddedRuntimeTestModel(freeze=True,
+                                                           save=True)
 
   def testRunCommandInputExprs(self):
     parser = saved_model_cli.create_parser()
@@ -238,7 +274,7 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
       graph_def = meta_graph_def.graph_def
       node_dict = {node.name: node for node in graph_def.node}
       self.assertEqual(node_dict['add'].attr['T'].type, tf.float32)
-      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float16)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float32)
 
   def testPrecisionConversionWithConfigFile(self):
     parser = saved_model_cli.create_parser()
@@ -274,7 +310,57 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
       graph_def = meta_graph_def.graph_def
       node_dict = {node.name: node for node in graph_def.node}
       self.assertEqual(node_dict['add'].attr['T'].type, tf.float32)
-      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float16)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float32)
+
+  def testPrecisionConversionWithoutExlusion(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert', '--dir', self.model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--precision_mode', 'FP16'
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_dict = {node.name: node for node in graph_def.node}
+      self.assertEqual(node_dict['add'].attr['T'].type, tf.float16)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float32)
+
+  def testPrecisionConversionWithConfigFileWithoutExlusion(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    cfg_data = {"precision_mode": "FP16"}
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
+
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      graph_def = meta_graph_def.graph_def
+      node_dict = {node.name: node for node in graph_def.node}
+      self.assertEqual(node_dict['add'].attr['T'].type, tf.float16)
+      self.assertEqual(node_dict['mul'].attr['T'].type, tf.float32)
 
   def testConvertWithConfigFile(self):
     cfg_data = {
@@ -497,8 +583,6 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
         '--tag_set',
         tag_constants.SERVING,
         'ipu',
-        '--int64_to_int32_conversion',
-        False,
     ])
     saved_model_cli.convert_with_ipu(convert_args)
 
@@ -517,14 +601,9 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
     converted_model_path = os.path.join(self.get_temp_dir(),
                                         'converted_savedmodel')
     convert_args = parser.parse_args([
-        'convert',
-        '--dir',
-        self.model_int64.model_path,
-        '--output_dir',
-        converted_model_path,
-        '--tag_set',
-        tag_constants.SERVING,
-        'ipu',
+        'convert', '--dir', self.model_int64.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--int64_to_int32_conversion'
     ])
     saved_model_cli.convert_with_ipu(convert_args)
 
@@ -538,19 +617,96 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
           if _attr in ['T', 'dtype'] and node.attr[_attr].type:
             self.assertTrue(node.attr[_attr].type != types_pb2.DT_INT64)
 
+  @tu.test_uses_ipus(1)
+  def testLoopRepeatWrapperConverter(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    cachedir = os.path.join(self.get_temp_dir(), 'cachedir')
+    os.mkdir(cachedir)
+    convert_args = parser.parse_args([
+        'convert', '--dir', self.emb_model.model_path, '--output_dir',
+        converted_model_path, '--tag_set', tag_constants.SERVING, 'ipu',
+        '--int64_to_int32_conversion', '--embedded_runtime_save_config',
+        textwrap.dedent(f"""\
+         {{
+            "embedded_runtime_exec_cachedir": "{cachedir}",
+            "runtime_api_timeout_us": 5000
+         }}"""), "--batch_size", '1', "--batch_per_step", "1"
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
 
-def check_sharding_num(node, index):
-  if '_XlaSharding' not in node.attr:
-    return False
+    output_expected = np.array([[4.]])
 
-  proto = xla_data_pb2.OpSharding(type=xla_data_pb2.OpSharding.MAXIMAL,
-                                  tile_assignment_devices=[index])
-  attr_value = attr_value_pb2.AttrValue(s=proto.SerializeToString())
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      input_pl = [
+          sess.graph.get_tensor_by_name(i.name) for i in
+          meta_graph_def.signature_def["serving_default"].inputs.values()
+      ]
+      output_pl = [
+          sess.graph.get_tensor_by_name(i.name) for i in
+          meta_graph_def.signature_def["serving_default"].outputs.values()
+      ]
+      o, *_ = sess.run(
+          output_pl,
+          feed_dict={i: np.array([[1.]]).astype(np.float32)
+                     for i in input_pl})
+      self.assertEqual(o, output_expected)
 
-  if node.attr['_XlaSharding'] != attr_value:
-    return False
+  @tu.test_uses_ipus(1)
+  def testLoopRepeatWrapperConverterWithConfigFile(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    cachedir = os.path.join(self.get_temp_dir(), 'cachedir')
+    os.mkdir(cachedir)
+    cfg_data = {
+        "batch_size": 1,
+        "batch_per_step": 10,
+        'int64_to_int32_conversion': True,
+        "embedded_runtime_save_config": {
+            "embedded_runtime_exec_cachedir": cachedir,
+            "runtime_api_timeout_us": 5000,
+        }
+    }
+    cfg_file = os.path.join(self.get_temp_dir(), 'cfg.json')
+    with open(cfg_file, 'w') as f:
+      json.dump(cfg_data, f)
 
-  return True
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.emb_model.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+        '--config_file',
+        cfg_file,
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    output_expected = np.array([[4.]])
+
+    with session.Session(graph=ops.Graph()) as sess:
+      meta_graph_def = loader.load(sess, [tag_constants.SERVING],
+                                   converted_model_path)
+      input_pl = [
+          sess.graph.get_tensor_by_name(i.name) for i in
+          meta_graph_def.signature_def["serving_default"].inputs.values()
+      ]
+      output_pl = [
+          sess.graph.get_tensor_by_name(i.name) for i in
+          meta_graph_def.signature_def["serving_default"].outputs.values()
+      ]
+      o, *_ = sess.run(
+          output_pl,
+          feed_dict={i: np.array([[1.]]).astype(np.float32)
+                     for i in input_pl})
+      self.assertEqual(o, output_expected)
 
 
 if __name__ == '__main__':
