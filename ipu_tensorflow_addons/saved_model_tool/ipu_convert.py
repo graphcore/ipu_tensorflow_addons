@@ -34,6 +34,7 @@ from tensorflow.python.saved_model import builder
 from tensorflow.python.saved_model import loader
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.saved_model import tag_constants
+from tensorflow.python.ipu.config import IPUConfig
 
 from ipu_tensorflow_addons.saved_model_tool.converter import ConverterPipeline
 
@@ -414,6 +415,23 @@ class IpuGraphConverter(object):
           new_graph_def, input_signature_def)
     return new_graph_def, input_signature_def
 
+  def save_ipu_config(self, output_saved_model_dir):
+    config = IPUConfig()
+    config.matmuls.poplar_options["availableMemoryProportion"] = str(
+        self._conversion_params.matmul_amp)
+    config.convolutions.poplar_options["availableMemoryProportion"] = str(
+        self._conversion_params.conv_amp)
+    config.matmuls.poplar_options[
+        "partialsType"] = self._conversion_params.matmul_partial_type
+    config.convolutions.poplar_options[
+        "partialsType"] = self._conversion_params.conv_partial_type
+    config.auto_select_ipus = self._conversion_params.num_ipus
+    pb = config._create_protobuf()  # pylint: disable=protected-access
+    ipu_cfg_path = os.path.join(output_saved_model_dir, 'ipu_cfg.bin')
+    with open(ipu_cfg_path, 'wb') as f:
+      f.write(pb.SerializeToString())
+    print(f"Saved IPU config information to {ipu_cfg_path}.")
+
   def save(self, output_saved_model_dir):
     """Save the converted graph as a SavedModel.
 
@@ -448,6 +466,7 @@ class IpuGraphConverter(object):
                     "/saved_model.pb").readlines()
     self._conversion_params.pb_md5sum = resp[0].split(" ")[0]
     self._conversion_params.save_to_json_file(output_saved_model_dir)
+    self.save_ipu_config(output_saved_model_dir)
 
 
 def create_inference_graph(batch_size=1,

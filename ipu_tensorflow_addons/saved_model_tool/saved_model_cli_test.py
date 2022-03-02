@@ -37,6 +37,7 @@ from tensorflow.python.platform import test
 from tensorflow.compiler.xla import xla_data_pb2
 from tensorflow.core.framework import attr_value_pb2
 from tensorflow.core.framework import types_pb2
+from tensorflow.compiler.plugin.poplar.driver import config_pb2
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
 from ipu_tensorflow_addons import test_utils as tu
@@ -707,6 +708,32 @@ class SavedModelCLITestCase(test_util.TensorFlowTestCase):
           feed_dict={i: np.array([[1.]]).astype(np.float32)
                      for i in input_pl})
       self.assertEqual(o, output_expected)
+
+  def testSaveAndLoadConfig(self):
+    parser = saved_model_cli.create_parser()
+    converted_model_path = os.path.join(self.get_temp_dir(),
+                                        'converted_savedmodel')
+    convert_args = parser.parse_args([
+        'convert',
+        '--dir',
+        self.model_int64.model_path,
+        '--output_dir',
+        converted_model_path,
+        '--tag_set',
+        tag_constants.SERVING,
+        'ipu',
+    ])
+    saved_model_cli.convert_with_ipu(convert_args)
+
+    ipu_cfg_path = os.path.join(converted_model_path, 'ipu_cfg.bin')
+    if not os.path.exists(ipu_cfg_path):
+      raise ValueError("IPU configure files do not exist.")
+
+    with open(ipu_cfg_path, 'rb') as f:
+      config = config_pb2.IpuOptions()
+      config.ParseFromString(f.read())
+    self.assertTrue(config.convolution_options)
+    self.assertTrue(config.matmul_options)
 
 
 if __name__ == '__main__':
