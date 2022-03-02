@@ -97,6 +97,31 @@ def json_dict(strs):
   return json.loads(strs)
 
 
+def change_description_cmd_name(parser: argparse.ArgumentParser, subcmd=None):
+  if not subcmd:
+    return
+
+  description_with_saved_model_cli = parser.description
+  description_with_ipu_saved_model_tool = (
+      description_with_saved_model_cli.replace("saved_model_cli",
+                                               "ipu_saved_model_tool"))
+  parser.description = description_with_ipu_saved_model_tool
+  for cmd in subcmd:
+    # pylint: disable=protected-access
+    description_with_saved_model_cli = parser._subparsers._group_actions[
+        0].choices[cmd].description
+    description_with_ipu_saved_model_tool = (
+        description_with_saved_model_cli.replace("saved_model_cli",
+                                                 "ipu_saved_model_tool"))
+    if cmd == "run":
+      description_with_ipu_saved_model_tool = (
+          description_with_ipu_saved_model_tool.replace(
+              "guide/ipu_saved_model_tool", "guide/saved_model_cli"))
+    # pylint: disable=protected-access
+    parser._subparsers._group_actions[0].choices[
+        cmd].description = description_with_ipu_saved_model_tool
+
+
 def create_parser():
   """Creates a parser that parse the command line arguments.
 
@@ -112,11 +137,11 @@ def create_parser():
       action='store_true',
       default=None,
       help='If specified, ipu.utils.configure_ipu_system() will be called. '
-      'This option should be only used if the worker is a IPU job.')
+      'This option should be only used if the worker is an IPU job.')
   parser_run.add_argument('--num_ipus',
                           type=int,
                           default=1,
-                          help="Number of ipus to utilize of inference.")
+                          help="Number of IPUs to use for inference.")
   parser_run.add_argument('--matmul_amp',
                           type=str,
                           default='0.6',
@@ -136,7 +161,11 @@ def create_parser():
   parser_run.set_defaults(func=run)
 
   # Add an `ipu` choice to the "conversion methods" subparsers
-  parser_convert_with_ipu = argparse.ArgumentParser(
+
+  # pylint: disable=protected-access
+  convert_subparsers = parser._subparsers._group_actions[0].choices[
+      'convert']._subparsers._group_actions[0]
+  parser_convert_with_ipu = convert_subparsers.add_parser(
       'ipu',
       description="Convert the SavedModel with IPU integration.",
       formatter_class=argparse.RawTextHelpFormatter)
@@ -211,18 +240,18 @@ def create_parser():
       '--merge_subgraphs',
       action='store_true',
       default=False,
-      help='Merge multiple IPU subgraphs into one with `ipu compile` API.')
+      help='Merge multiple IPU subgraphs into one with `ipu compile` function.'
+  )
 
   parser_convert_with_ipu.add_argument(
       '--manual_sharding',
       action='store',
       type=list_of_lists_str,
       default=[],
-      help=(
-          "A list containing a list of regular expression strings for each IPU."
-          " Nodes who's names match the expressions for a given IPU"
-          " will be sharded on that IPU."
-          " Nodes which match no expressions will be placed on IPU0."))
+      help=("A list of regular expression strings for each IPU."
+            " Nodes whose names match the expressions for a given IPU"
+            " will be sharded on that IPU."
+            " Nodes which match no expressions will be placed on IPU0."))
   parser_convert_with_ipu.add_argument(
       '--embedded_runtime_save_config',
       type=json_dict,
@@ -241,9 +270,8 @@ def create_parser():
                                        help='Config file path (JSON format).')
   parser_convert_with_ipu.set_defaults(func=convert_with_ipu)
 
-  parser_convert = parser._subparsers._group_actions[0].choices['convert']  # pylint: disable=W0212
-  parser_convert._subparsers._group_actions[0].choices[  # pylint: disable=W0212
-      'ipu'] = parser_convert_with_ipu
+  change_description_cmd_name(parser,
+                              subcmd=["show", "run", "convert", "scan"])
 
   return parser
 
