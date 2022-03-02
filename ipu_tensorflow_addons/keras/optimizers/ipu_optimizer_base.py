@@ -28,6 +28,7 @@ from tensorflow.python.keras import backend, initializers
 from tensorflow.python.keras.optimizer_v2 import optimizer_v2
 from tensorflow.python.keras.optimizer_v2.optimizer_v2 import _var_key
 from tensorflow.python.ops import variables as tf_variables
+from tensorflow.python.training.tracking import base as trackable
 
 
 class IpuOptimizerBase(optimizer_v2.OptimizerV2):
@@ -73,37 +74,83 @@ class IpuOptimizerBase(optimizer_v2.OptimizerV2):
   def _resource_apply_sparse(self, grad, handle, indices, apply_state):
     raise NotImplementedError("Must be implemented in subclasses.")
 
-  def add_slot_with_dtype(self, var, slot_name, dtype, initializer="zeros"):
-    """Add a new slot variable for `var` with a specific dtype.
+  def get_slot_dtype(self, var, slot_name):  # pylint: disable=unused-argument
+    """Returns the slot dtype for `var` and `slot_name`.
 
     Args:
-      var: A variable to add.
-      slot_name: The name of the slot.
-      dtype: Dtype to create the slot in.
-      initializer: Default initializer for `var`.
+      var: a `Variable` object.
+      slot_name: name of the slot variable.
+
+    Returns:
+      The `dtype` of the slot variable.
     """
+    return var.dtype
+
+  def add_slot(  # pylint: disable=arguments-differ
+      self,
+      var,
+      slot_name,
+      initializer="zeros",
+      shape=None,
+      dtype=None):
+    """Add a new slot variable for `var`.
+
+    A slot variable is an additional variable associated with `var` to train.
+    It is allocated and managed by optimizers, e.g. `Adam`.
+
+    Args:
+      var: a `Variable` object.
+      slot_name: name of the slot variable.
+      initializer: initializer of the slot variable
+      shape: (Optional) shape of the slot variable. If not set, it will default
+      to the shape of `var`.
+      dtype: (Optional) data type the slot variable. If not set, it will use
+      the data type of `get_slot_dtype()`. If `get_slot_dtype()` returns `None`
+      then the data type of `var` is used.
+
+    Returns:
+      A slot variable.
+    """
+    # This function is a copy of the `OptimizerV2.add_slot()` function with
+    # extra handling for the `dtype` to allow for mixed precision.
     if slot_name not in self._slot_names:
       self._slot_names.append(slot_name)
-    if dtype is None:
-      dtype = var.dtype
     var_key = _var_key(var)
     slot_dict = self._slots.setdefault(var_key, {})
     weight = slot_dict.get(slot_name, None)
+    dtype = dtype or self.get_slot_dtype(var, slot_name) or var.dtype
     if weight is None:
-      if isinstance(initializer, six.string_types) or callable(initializer):
+      if isinstance(initializer, str) or callable(initializer):
         initializer = initializers.get(initializer)
+        if isinstance(
+            initializer,
+            trackable.CheckpointInitialValueCallable) or (shape is not None):
+          slot_shape = shape
+        else:
+          slot_shape = var.shape
         initial_value = functools.partial(initializer,
-                                          shape=var.shape,
+                                          shape=slot_shape,
                                           dtype=dtype)
       else:
         initial_value = initializer
-      strategy = distribute_ctx.get_strategy()
-      with strategy.extended.colocate_vars_with(var):
-        weight = tf_variables.Variable(
-            name="%s/%s" % (var._shared_name, slot_name),  # pylint: disable=protected-access
-            dtype=dtype,
-            trainable=False,
-            initial_value=initial_value)
+
+      with self._distribution_strategy_scope():
+        strategy = distribute_ctx.get_strategy()
+        if not strategy.extended.variable_created_in_scope(var):
+          raise ValueError(
+              "Trying to create optimizer slot variable under the scope for "
+              "tf.distribute.Strategy ({}), which is different from the scope "
+              "used for the original variable ({}). Make sure the slot "
+              "variables are created under the same strategy scope. This may "
+              "happen if you're restoring from a checkpoint outside the scope".
+              format(strategy, var))
+
+        with strategy.extended.colocate_vars_with(var):
+          weight = tf_variables.Variable(
+              name="%s/%s" % (var._shared_name, slot_name),  # pylint: disable=protected-access
+              dtype=dtype,
+              trainable=False,
+              initial_value=initial_value)
       backend.track_variable(weight)
       slot_dict[slot_name] = weight
       self._restore_slot_variable(slot_name=slot_name,
@@ -111,6 +158,12 @@ class IpuOptimizerBase(optimizer_v2.OptimizerV2):
                                   slot_variable=weight)
       self._weights.append(weight)
     return weight
+
+  def add_slot_with_dtype(self, var, slot_name, dtype, initializer="zeros"):
+    return self.add_slot(var,
+                         slot_name=slot_name,
+                         initializer=initializer,
+                         dtype=dtype)
 
   def get_config(self):
     config = super(IpuOptimizerBase, self).get_config()

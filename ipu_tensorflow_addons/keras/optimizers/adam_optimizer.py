@@ -99,14 +99,22 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
     self.vhat_dtype = vhat_dtype
     self.debiasing = debiasing
 
+  def get_slot_dtype(self, var, slot_name):
+    if slot_name == 'm':
+      return self.m_dtype
+    elif slot_name == 'v':
+      return self.v_dtype
+    assert slot_name == 'vhat'
+    return self.vhat_dtype
+
   def _create_slots(self, var_list):
     for var in var_list:
-      self.add_slot_with_dtype(var, 'm', self.m_dtype)
+      self.add_slot(var, 'm', dtype=self.get_slot_dtype(var, 'm'))
     for var in var_list:
-      self.add_slot_with_dtype(var, 'v', self.v_dtype)
+      self.add_slot(var, 'v', dtype=self.get_slot_dtype(var, 'v'))
     if self.amsgrad:
       for var in var_list:
-        self.add_slot_with_dtype(var, 'vhat', self.vhat_dtype)
+        self.add_slot(var, 'vhat', dtype=self.get_slot_dtype(var, 'vhat'))
 
   def _prepare_local(self, var_device, var_dtype, apply_state):
     super()._prepare_local(var_device, var_dtype, apply_state)

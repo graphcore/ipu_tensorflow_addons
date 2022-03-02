@@ -21,7 +21,7 @@ from tensorflow.python.framework import test_util
 
 
 class OptimizerTest(test_util.TensorFlowTestCase, parameterized.TestCase):
-  def keras_mixed_precision_test_helper(self, optimizer, mixed_prec_policy):
+  def get_simple_model(self, optimizer, mixed_prec_policy):
     policy = mixed_precision.Policy(mixed_prec_policy)
     mixed_precision.set_global_policy(policy)
 
@@ -35,7 +35,11 @@ class OptimizerTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     model.compile(loss="sparse_categorical_crossentropy",
                   optimizer=optimizer,
                   metrics=["accuracy"])
+    return model
+
+  def train_simple_model_on_sample(self, optimizer, mixed_prec_policy):
+    model = self.get_simple_model(optimizer, mixed_prec_policy)
     x_train = np.array([[1, 1, 1, 1, 1]], dtype="float32")
     y_train = np.array([1], dtype="float32")
     model.fit(x_train, y_train, batch_size=1, epochs=1)
-    return dense1.trainable_variables[0]
+    return model

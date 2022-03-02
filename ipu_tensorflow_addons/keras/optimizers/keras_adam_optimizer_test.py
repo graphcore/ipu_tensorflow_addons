@@ -16,6 +16,7 @@
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
 
+import tempfile
 import numpy as np
 from absl.testing import parameterized
 from tensorflow.keras.optimizers.schedules import InverseTimeDecay
@@ -362,24 +363,34 @@ class AdamOptimizerTest(OptimizerTest):
   def testKerasMixedPrecisionSupported(self, mixed_prec_policy, m_dtype,
                                        v_dtype, optimizer_compute_precisions,
                                        debiasing):
-    optimizer = AdamIpuOptimizer(
-        m_dtype=m_dtype,
-        v_dtype=v_dtype,
-        optimizer_compute_precisions=optimizer_compute_precisions,
-        debiasing=debiasing,
-    )
-    sample_var = self.keras_mixed_precision_test_helper(
-        optimizer, mixed_prec_policy)
-    if m_dtype is None:
-      self.assertEqual(
-          optimizer.get_slot(sample_var, "m").dtype, sample_var.dtype)
-    else:
-      self.assertEqual(optimizer.get_slot(sample_var, "m").dtype, m_dtype)
-    if v_dtype is None:
-      self.assertEqual(
-          optimizer.get_slot(sample_var, "v").dtype, sample_var.dtype)
-    else:
-      self.assertEqual(optimizer.get_slot(sample_var, "v").dtype, v_dtype)
+    def get_optimizer():
+      return AdamIpuOptimizer(
+          m_dtype=m_dtype,
+          v_dtype=v_dtype,
+          optimizer_compute_precisions=optimizer_compute_precisions,
+          debiasing=debiasing,
+      )
+
+    optimizer = get_optimizer()
+    model = self.train_simple_model_on_sample(optimizer, mixed_prec_policy)
+    sample_var = model.layers[1].trainable_variables[0]
+
+    expected_m_dtype = m_dtype or sample_var.dtype
+    self.assertEqual(
+        optimizer.get_slot(sample_var, "m").dtype, expected_m_dtype)
+
+    expected_v_dtype = v_dtype or sample_var.dtype
+    self.assertEqual(
+        optimizer.get_slot(sample_var, "v").dtype, expected_v_dtype)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+      old_weights = model.get_weights()
+      model.save_weights(tmp_dir)
+      model = self.get_simple_model(get_optimizer(), mixed_prec_policy)
+      model.load_weights(tmp_dir)
+      new_weights = model.get_weights()
+      for old_weight, new_weight in zip(old_weights, new_weights):
+        self.assertAllEqual(old_weight, new_weight)
 
 
 if __name__ == '__main__':

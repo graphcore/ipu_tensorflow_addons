@@ -73,10 +73,16 @@ class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
                      **kwargs)
     self.momentum_accum_dtype = momentum_accum_dtype
 
+  def get_slot_dtype(self, var, slot_name):
+    assert slot_name == 'momentum'
+    return self.momentum_accum_dtype
+
   def _create_slots(self, var_list):
     if self._momentum:
       for var in var_list:
-        self.add_slot_with_dtype(var, "momentum", self.momentum_accum_dtype)
+        self.add_slot(var,
+                      'momentum',
+                      dtype=self.get_slot_dtype(var, 'momentum'))
 
   def _prepare_local(self, var_device, var_dtype, apply_state):
     super(SGDIpuOptimizer, self)._prepare_local(var_device, var_dtype,

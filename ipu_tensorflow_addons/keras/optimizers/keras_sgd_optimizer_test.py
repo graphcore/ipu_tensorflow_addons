@@ -16,6 +16,7 @@
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
 
+import tempfile
 import numpy as np
 from absl.testing import parameterized
 from tensorflow.keras.optimizers.schedules import InverseTimeDecay
@@ -184,20 +185,30 @@ class SGDOptimizerTest(OptimizerTest):
                                            mom_accum_dtype,
                                            optimizer_compute_precisions,
                                            momentum):
-    optimizer = SGDIpuOptimizer(
-        momentum=momentum,
-        momentum_accum_dtype=mom_accum_dtype,
-        optimizer_compute_precisions=optimizer_compute_precisions,
-    )
-    sample_var = self.keras_mixed_precision_test_helper(
-        optimizer, mixed_prec_policy)
+    def get_optimizer():
+      return SGDIpuOptimizer(
+          momentum=momentum,
+          momentum_accum_dtype=mom_accum_dtype,
+          optimizer_compute_precisions=optimizer_compute_precisions,
+      )
+
+    optimizer = get_optimizer()
+    model = self.train_simple_model_on_sample(optimizer, mixed_prec_policy)
+    sample_var = model.layers[1].trainable_variables[0]
+
     if momentum:
-      if mom_accum_dtype is None:
-        self.assertEqual(
-            optimizer.get_slot(sample_var, "momentum").dtype, sample_var.dtype)
-      else:
-        self.assertEqual(
-            optimizer.get_slot(sample_var, "momentum").dtype, mom_accum_dtype)
+      expected_dtype = mom_accum_dtype or sample_var.dtype
+      self.assertEqual(
+          optimizer.get_slot(sample_var, "momentum").dtype, expected_dtype)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+      old_weights = model.get_weights()
+      model.save_weights(tmp_dir)
+      model = self.get_simple_model(get_optimizer(), mixed_prec_policy)
+      model.load_weights(tmp_dir)
+      new_weights = model.get_weights()
+      for old_weight, new_weight in zip(old_weights, new_weights):
+        self.assertAllEqual(old_weight, new_weight)
 
 
 if __name__ == '__main__':
