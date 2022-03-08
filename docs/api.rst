@@ -17,13 +17,13 @@ TensorFlow optimizers
   :special-members: __init__
   :imported-members:
 
-IPU TensorFlow saved model tool CLI
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+IPU SavedModel CLI
+^^^^^^^^^^^^^^^^^^
 
 .. argparse::
   :module: ipu_tensorflow_addons.saved_model_tool.saved_model_cli
   :func: create_parser
-  :prog: ipu_saved_model_tool
+  :prog: ipu_saved_model_cli
 
   show : @replace
     Usage examples:
@@ -32,34 +32,34 @@ IPU TensorFlow saved model tool CLI
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model
+      $ipu_saved_model_cli show --dir /tmp/saved_model
 
     To show all available SignatureDef keys in a MetaGraphDef specified by its `tag-set`:
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model --tag_set serve
+      $ipu_saved_model_cli show --dir /tmp/saved_model --tag_set serve
 
 
     For a MetaGraphDef with multiple tags in the `tag-set`, all tags must be passed in, separated by `,` :
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model --tag_set serve,gpu
+      $ipu_saved_model_cli show --dir /tmp/saved_model --tag_set serve,gpu
 
 
     To show all inputs and outputs TensorInfo for a specific SignatureDef specified by the SignatureDef key in a MetaGraph.
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model --tag_set serve --signature_def serving_default
+      $ipu_saved_model_cli show --dir /tmp/saved_model --tag_set serve --signature_def serving_default
 
 
     To show all available information in the SavedModel:
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model --all
+      $ipu_saved_model_cli show --dir /tmp/saved_model --all
 
 
   run : @replace
@@ -69,7 +69,7 @@ IPU TensorFlow saved model tool CLI
 
     .. code:: bash
 
-      $ipu_saved_model_tool show --dir /tmp/saved_model --tag_set serve \
+      $ipu_saved_model_cli show --dir /tmp/saved_model --tag_set serve \
         --signature_def serving_default \
         --inputs input1_key=/tmp/124.npz[x],input2_key=/tmp/123.npy \
         --input_exprs 'input3_key=np.ones(2)' \
@@ -90,7 +90,7 @@ IPU TensorFlow saved model tool CLI
 
     .. code:: bash
 
-      $ipu_saved_model_tool scan --dir /tmp/saved_model
+      $ipu_saved_model_cli scan --dir /tmp/saved_model
 
 
 
@@ -104,7 +104,7 @@ IPU TensorFlow saved model tool CLI
 
     .. code:: bash
 
-      $ipu_saved_model_tool convert \
+      $ipu_saved_model_cli convert \
         --dir /tmp/saved_model \
         --tag_set serve \
         --output_dir /tmp/saved_model_trt \
