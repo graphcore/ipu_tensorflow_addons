@@ -302,6 +302,40 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     self.assertNotEqual(graph_def, self.model.graph_def)
     self.assertEqual(signature, self.model.signature_def)
 
+  @test_uses_ipus(1)
+  def test_unique_engine_name(self):
+    def find_app_call(graph_def):
+      for node in graph_def.node:
+        if node.op == "ApplicationCall":
+          return node.attr["engine_name"].s
+      return b""
+
+    converter = LoopRepeatWrapper(
+        IpuConversionParams(batch_size=1,
+                            int64_to_int32_conversion=True,
+                            embedded_runtime_save_config={
+                                "embedded_runtime_exec_cachedir":
+                                self.poplar_exec_path,
+                                "runtime_api_timeout_us": 5000
+                            }))
+
+    graph_def_first, _ = converter.apply(self.model.graph_def,
+                                         self.model.signature_def)
+    first_engine_name = find_app_call(graph_def_first)
+    converter = LoopRepeatWrapper(
+        IpuConversionParams(batch_size=2,
+                            int64_to_int32_conversion=True,
+                            embedded_runtime_save_config={
+                                "embedded_runtime_exec_cachedir":
+                                self.poplar_exec_path,
+                                "runtime_api_timeout_us": 5000
+                            }))
+
+    graph_def_second, _ = converter.apply(self.model.graph_def,
+                                          self.model.signature_def)
+    second_engine_name = find_app_call(graph_def_second)
+    self.assertNotEqual(first_engine_name, second_engine_name)
+
 
 if __name__ == '__main__':
   test.main()

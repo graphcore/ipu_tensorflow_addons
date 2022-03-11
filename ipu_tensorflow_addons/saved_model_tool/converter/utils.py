@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 import os
+from uuid import uuid4
 
 import numpy as np
 from tensorflow import as_dtype
@@ -108,10 +109,10 @@ def input_name_to_placeholder_name(name):
 def tensor_name_to_placehoder_name(name):
   if ":0" in name:
     return name.split(":0")[0]
-  elif ":" in name:
+  if ":" in name:
     return name.replace(":", "_")
-  else:
-    raise ValueError(f"The input name ({name}) is not a tensor name.")
+
+  raise ValueError(f"The input name ({name}) is not a tensor name.")
 
 
 def node_name_from_tensor_name(tensor_name):
@@ -305,7 +306,7 @@ def _graph_def_reconstruction(signature,
   with ops.Graph().as_default() as graph:
     ctx = ipu.embedded_runtime.embedded_runtime_start(
         poplar_exec_filepath, [],
-        "application",
+        f"application-{uuid4()}",
         timeout=runtime_api_timeout_us)
 
     # If input_dtype_from_graph == input_dtype_from_signature,
