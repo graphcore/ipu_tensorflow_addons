@@ -29,6 +29,7 @@ from tensorflow.python.framework import tensor_shape
 from tensorflow.python.layers import base as base_layer
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.ipu.ops import op_util
@@ -293,6 +294,22 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     """Shapes of Popnn canonical bias tensors for given layer."""
     return [self._num_gates_per_layer, self._num_units]
 
+  def _extract_final_state(self, outputs, seq_len=None):
+    time_len = array_ops.shape(outputs)[0]
+    batch_size = array_ops.shape(outputs)[1]
+
+    if seq_len is not None:
+      indices = math_ops.add(
+          seq_len, math_ops.range(0, time_len * batch_size,
+                                  delta=time_len)) - 1
+      state = array_ops.transpose(outputs, perm=(1, 0, 2))
+      state = array_ops.reshape(state, [-1, self._num_units])
+      state = array_ops.gather(state, indices)
+    else:
+      state = outputs[-1, :, :]
+
+    return state
+
   @property
   def _options_with_amp(self):
     # TODO(T54285): Delete this whole function (property) and replace all calls
@@ -479,7 +496,7 @@ class PopnnLSTM(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    outputs, output_h, output_c, _ = gen_popnn_ops.popnn_lstm_layer(
+    result = gen_popnn_ops.popnn_lstm_layer(
         inputs=inputs,
         num_channels=self._num_units,
         kernel=self.kernel,
@@ -493,6 +510,14 @@ class PopnnLSTM(_PopnnRNN):
         name=self._name,
         options=options,
         options_bwd=options_bwd)
+
+    if len(result) == 3:
+      outputs, output_c, *_ = result
+    else:
+      outputs, _, output_c, _ = result
+
+    output_h = self._extract_final_state(outputs)
+
     state = rnn_cell.LSTMStateTuple(output_c, output_h)
 
     return outputs, state
@@ -568,7 +593,7 @@ class PopnnDynamicLSTM(PopnnLSTM):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    outputs, output_h, output_c, _ = gen_popnn_ops.popnn_dynamic_lstm_layer(
+    result = gen_popnn_ops.popnn_dynamic_lstm_layer(
         inputs=inputs,
         seq_len=seq_len,
         num_channels=self._num_units,
@@ -583,6 +608,14 @@ class PopnnDynamicLSTM(PopnnLSTM):
         name=self._name,
         options=options,
         options_bwd=options_bwd)
+
+    if len(result) == 3:
+      outputs, output_c, *_ = result
+    else:
+      outputs, _, output_c, _ = result
+
+    output_h = self._extract_final_state(outputs, seq_len)
+
     state = rnn_cell.LSTMStateTuple(output_c, output_h)
 
     return outputs, state
@@ -741,7 +774,7 @@ class PopnnGRU(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, output_c, _ = gen_popnn_ops.popnn_gru_layer(
+    outputs, *_ = gen_popnn_ops.popnn_gru_layer(
         inputs=inputs,
         num_channels=self._num_units,
         kernel=self.kernel,
@@ -755,7 +788,10 @@ class PopnnGRU(_PopnnRNN):
         reset_after=self._reset_after,
         options=options,
         options_bwd=options_bwd)
-    return output, output_c
+
+    output_h = self._extract_final_state(outputs)
+
+    return outputs, output_h
 
   def state_shape(self, batch_size):
     """Shape of Popnn GRU state.
@@ -929,26 +965,14 @@ class PopnnDynamicGRU(PopnnGRU):
       initial_state = self._zero_state(batch_size)
 
     initial_state = ops.convert_to_tensor(initial_state, dtype=dtype)
-    bias_ones = init_ops.constant_initializer(1.0, dtype=inputs.dtype)
-    bias_zeros = init_ops.constant_initializer(0.0, dtype=inputs.dtype)
-    biases_r_u = vs.get_variable("bias_r_u",
-                                 dtype=inputs.dtype,
-                                 initializer=bias_ones,
-                                 shape=[2, self._num_units])
-    biases_c = vs.get_variable("bias_c",
-                               dtype=inputs.dtype,
-                               initializer=bias_zeros,
-                               shape=[1, self._num_units])
-    biases = array_ops.concat([biases_r_u, biases_c], axis=0)
     if self._reset_after:
-      biases = array_ops.expand_dims(biases, 1)
-      biases = array_ops.concat([biases, biases], axis=1)
-    self.biases = biases
+      self.biases = array_ops.expand_dims(self.biases, 1)
+      self.biases = array_ops.concat([self.biases, self.biases], axis=1)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, output_c, _ = gen_popnn_ops.popnn_dynamic_gru_layer(
+    outputs, *_ = gen_popnn_ops.popnn_dynamic_gru_layer(
         inputs=inputs,
         seq_len=seq_len,
         num_channels=self._num_units,
@@ -963,7 +987,10 @@ class PopnnDynamicGRU(PopnnGRU):
         reset_after=self._reset_after,
         options=options,
         options_bwd=options_bwd)
-    return output, output_c
+
+    output_h = self._extract_final_state(outputs, seq_len)
+
+    return outputs, output_h
 
 
 class PopnnAUGRU(PopnnGRU):
@@ -1121,7 +1148,7 @@ class PopnnAUGRU(PopnnGRU):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, output_c, _ = gen_popnn_ops.popnn_augru_layer(
+    outputs, *_ = gen_popnn_ops.popnn_augru_layer(
         inputs=inputs,
         att_score=attention_score,
         seq_len=seq_len,
@@ -1137,7 +1164,10 @@ class PopnnAUGRU(PopnnGRU):
         reset_after=self._reset_after,
         options=options,
         options_bwd=options_bwd)
-    return output, output_c
+
+    output_h = self._extract_final_state(outputs, seq_len)
+
+    return outputs, output_h
 
   @property
   def saveable(self):

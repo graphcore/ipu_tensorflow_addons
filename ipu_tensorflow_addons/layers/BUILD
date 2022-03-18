@@ -48,6 +48,16 @@ py_test(
     ],
 )
 
+py_test(
+    name = "rnn_final_state_test",
+    size = "large",
+    srcs = ["rnn_final_state_test.py"],
+    deps = [
+        ":layers",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
+)
+
 test_suite(
     name = "all_tests",
     tests = [
@@ -55,5 +65,6 @@ test_suite(
         "gru_training_test",
         "lstm_size_test",
         "lstm_training_test",
+        "rnn_final_state_test",
     ],
 )
