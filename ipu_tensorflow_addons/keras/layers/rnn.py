@@ -296,6 +296,9 @@ class _PopnnRNN(ipu_layer.IPULayer):
                             noise_shape=noise_shape,
                             name=self.name + "_dropout")
 
+  def _extract_final_state(self, outputs):
+    return outputs[-1, :, :]
+
   @property
   def _options_with_amp(self):
     # TODO(T54285): Delete this whole function (property) and replace all calls
@@ -663,7 +666,7 @@ class PopnnLSTM(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, output_h, output_c, _ = gen_popnn_ops.popnn_lstm_layer(
+    result = gen_popnn_ops.popnn_lstm_layer(
         inputs=inputs,
         activation=self._activation,
         recurrent_activation=self._recurrent_activation,
@@ -677,6 +680,15 @@ class PopnnLSTM(_PopnnRNN):
         name=self._name,
         options=options,
         options_bwd=options_bwd)
+
+    if len(result) == 3:
+      output, output_c, *_ = result
+    else:
+      output, _, output_c, _ = result
+
+    output_h = None
+    if self._stateful or self._return_state:
+      output_h = self._extract_final_state(output)
 
     if self._stateful:
       updates = []
@@ -1080,7 +1092,7 @@ class PopnnGRU(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, output_state, _ = gen_popnn_ops.popnn_gru_layer(
+    output, *_ = gen_popnn_ops.popnn_gru_layer(
         inputs=inputs,
         activation=self._activation,
         recurrent_activation=self._recurrent_activation,
@@ -1094,6 +1106,10 @@ class PopnnGRU(_PopnnRNN):
         reset_after=self._reset_after,
         options=options,
         options_bwd=options_bwd)
+
+    output_state = None
+    if self._stateful or self._return_state:
+      output_state = self._extract_final_state(output)
 
     if self._stateful:
       updates = [state_ops.assign(self.states[0], output_state)]
