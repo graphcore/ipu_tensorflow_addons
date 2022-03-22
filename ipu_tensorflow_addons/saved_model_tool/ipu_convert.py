@@ -462,8 +462,9 @@ class IpuGraphConverter(object):
     saved_model_builder.save()
 
     # Save conversion_params info to output_saved_model_dir
-    resp = os.popen('md5sum ' + output_saved_model_dir +
-                    "/saved_model.pb").readlines()
+    with os.popen('md5sum ' + output_saved_model_dir +
+                  "/saved_model.pb") as md5sum_output:
+      resp = md5sum_output.readlines()
     self._conversion_params.pb_md5sum = resp[0].split(" ")[0]
     self._conversion_params.save_to_json_file(output_saved_model_dir)
     self.save_ipu_config(output_saved_model_dir)
