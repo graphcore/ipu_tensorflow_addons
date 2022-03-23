@@ -17,6 +17,20 @@ py_library(
         "converter/utils.py",
         "ipu_convert.py",
         "saved_model_cli.py",
+    ] + glob(
+        ["converter/autograph/**/*.py"],
+        exclude = ["converter/autograph/**/*_test.py"],
+    ),
+)
+
+py_test(
+    name = "tfv1graph_test",
+    srcs = [
+        "converter/autograph/tfv1graph_test.py",
+        "saved_model_test_utils.py",
+    ],
+    deps = [
+        ":saved_model_tool",
     ],
 )
 
