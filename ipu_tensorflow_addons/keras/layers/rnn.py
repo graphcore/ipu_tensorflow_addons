@@ -666,7 +666,7 @@ class PopnnLSTM(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    result = gen_popnn_ops.popnn_lstm_layer(
+    output, output_c, _ = gen_popnn_ops.popnn_lstm_layer(
         inputs=inputs,
         activation=self._activation,
         recurrent_activation=self._recurrent_activation,
@@ -681,13 +681,8 @@ class PopnnLSTM(_PopnnRNN):
         options=options,
         options_bwd=options_bwd)
 
-    if len(result) == 3:
-      output, output_c, *_ = result
-    else:
-      output, _, output_c, _ = result
-
     output_h = None
-    if self._stateful or self._return_state:
+    if self._stateful or self._return_state or not self._return_sequences:
       output_h = self._extract_final_state(output)
 
     if self._stateful:
@@ -701,7 +696,7 @@ class PopnnLSTM(_PopnnRNN):
       output = array_ops.transpose(output, [1, 0, 2])
 
     if not self._return_sequences:
-      output = output[-1, :, :] if self._time_major else output[:, -1, :]
+      output = output_h
 
     if self._return_state:
       return output, output_h, output_c
@@ -1092,7 +1087,7 @@ class PopnnGRU(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    output, *_ = gen_popnn_ops.popnn_gru_layer(
+    output, _ = gen_popnn_ops.popnn_gru_layer(
         inputs=inputs,
         activation=self._activation,
         recurrent_activation=self._recurrent_activation,
@@ -1108,7 +1103,7 @@ class PopnnGRU(_PopnnRNN):
         options_bwd=options_bwd)
 
     output_state = None
-    if self._stateful or self._return_state:
+    if self._stateful or self._return_state or not self._return_sequences:
       output_state = self._extract_final_state(output)
 
     if self._stateful:
@@ -1120,7 +1115,7 @@ class PopnnGRU(_PopnnRNN):
       output = array_ops.transpose(output, [1, 0, 2])
 
     if not self._return_sequences:
-      output = output[-1, :, :] if self._time_major else output[:, -1, :]
+      output = output_state
 
     if self._return_state:
       return output, output_state
