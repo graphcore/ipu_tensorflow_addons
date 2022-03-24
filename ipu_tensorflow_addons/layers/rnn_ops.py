@@ -71,6 +71,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
       bias_initializer=None,
       activation='tanh',
       recurrent_activation='sigmoid',
+      return_state=True,
       name=None,
       available_memory_proportion_fwd=None,
       available_memory_proportion_bwd=None,
@@ -95,6 +96,8 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
       recurrent_activation: Recurrent activation function. Defaults to
         "sigmoid". Must generate output in the [0,1] range.
         Accepted values: "tanh", "softmax", "sigmoid", "hard_sigmoid".
+      return_state: Boolean. Whether to return the last state in addition to the
+        output. Default: `True`.
       name: VariableScope for the created subgraph; defaults to class name.
         This only serves the default scope if later no scope is specified when
         invoking ``__call__()``.
@@ -147,6 +150,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
 
     self._activation = activation
     self._recurrent_activation = recurrent_activation
+    self._return_state = return_state
     self._available_memory_proportion_fwd = available_memory_proportion_fwd
     self._available_memory_proportion_bwd = available_memory_proportion_bwd
     self._options = dict() if options is None else options
@@ -372,6 +376,7 @@ class PopnnLSTM(_PopnnRNN):
                bias_initializer=None,
                activation='tanh',
                recurrent_activation='sigmoid',
+               return_state=True,
                name=None,
                available_memory_proportion_fwd=None,
                available_memory_proportion_bwd=None,
@@ -395,6 +400,8 @@ class PopnnLSTM(_PopnnRNN):
       recurrent_activation: Recurrent activation function. Defaults to
         "sigmoid". Must generate output in the [0,1] range.
         Accepted values: "tanh", "softmax", "sigmoid", "hard_sigmoid".
+      return_state: Boolean. Whether to return the last state in addition to the
+        output. Default: `True`.
       name: VariableScope for the created subgraph; defaults to class name.
         This only serves the default scope if later no scope is specified when
         invoking ``__call__()``.
@@ -432,6 +439,7 @@ class PopnnLSTM(_PopnnRNN):
         bias_initializer=bias_initializer,
         activation=activation,
         recurrent_activation=recurrent_activation,
+        return_state=return_state,
         name=name,
         available_memory_proportion_fwd=available_memory_proportion_fwd,
         available_memory_proportion_bwd=available_memory_proportion_bwd,
@@ -496,7 +504,7 @@ class PopnnLSTM(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    result = gen_popnn_ops.popnn_lstm_layer(
+    popnn_result = gen_popnn_ops.popnn_lstm_layer(
         inputs=inputs,
         num_channels=self._num_units,
         kernel=self.kernel,
@@ -511,16 +519,7 @@ class PopnnLSTM(_PopnnRNN):
         options=options,
         options_bwd=options_bwd)
 
-    if len(result) == 3:
-      outputs, output_c, *_ = result
-    else:
-      outputs, _, output_c, _ = result
-
-    output_h = self._extract_final_state(outputs)
-
-    state = rnn_cell.LSTMStateTuple(output_c, output_h)
-
-    return outputs, state
+    return self._make_call_result(popnn_result)
 
   def state_shape(self, batch_size):
     """Shape of Popnn LSTM states.
@@ -540,6 +539,17 @@ class PopnnLSTM(_PopnnRNN):
     for sp in self.state_shape(batch_size):
       res.append(array_ops.zeros(sp, dtype=self.dtype))
     return rnn_cell.LSTMStateTuple(*res)
+
+  def _make_call_result(self, popnn_result, seq_len=None):
+    """Takes the result from the popnn call and converts it to the correct
+    format.
+    """
+    outputs, c_state, _ = popnn_result
+    if self._return_state:
+      h_state = self._extract_final_state(outputs, seq_len)
+      state = rnn_cell.LSTMStateTuple(c_state, h_state)
+      return outputs, state
+    return outputs
 
   @property
   def saveable(self):
@@ -593,7 +603,7 @@ class PopnnDynamicLSTM(PopnnLSTM):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    result = gen_popnn_ops.popnn_dynamic_lstm_layer(
+    popnn_result = gen_popnn_ops.popnn_dynamic_lstm_layer(
         inputs=inputs,
         seq_len=seq_len,
         num_channels=self._num_units,
@@ -605,20 +615,12 @@ class PopnnDynamicLSTM(PopnnLSTM):
         partials_dtype=self._partials_dtype,
         activation=self._activation,
         recurrent_activation=self._recurrent_activation,
+        preserve_final_state=self._return_state,
         name=self._name,
         options=options,
         options_bwd=options_bwd)
 
-    if len(result) == 3:
-      outputs, output_c, *_ = result
-    else:
-      outputs, _, output_c, _ = result
-
-    output_h = self._extract_final_state(outputs, seq_len)
-
-    state = rnn_cell.LSTMStateTuple(output_c, output_h)
-
-    return outputs, state
+    return self._make_call_result(popnn_result, seq_len)
 
   @property
   def saveable(self):
@@ -652,6 +654,7 @@ class PopnnGRU(_PopnnRNN):
                bias_initializer=None,
                activation='tanh',
                recurrent_activation='sigmoid',
+               return_state=True,
                name=None,
                reset_after=False,
                available_memory_proportion_fwd=None,
@@ -676,6 +679,8 @@ class PopnnGRU(_PopnnRNN):
       recurrent_activation: Recurrent activation function. Defaults to
         "sigmoid". Must generate output in the [0,1] range.
         Accepted values: "tanh", "softmax", "sigmoid", "hard_sigmoid".
+      return_state: Boolean. Whether to return the last state in addition to the
+        output. Default: `True`.
       name: VariableScope for the created subgraph; defaults to class name.
         This only serves the default scope if later no scope is specified when
         invoking ``__call__()``.
@@ -718,6 +723,7 @@ class PopnnGRU(_PopnnRNN):
         bias_initializer=bias_initializer,
         activation=activation,
         recurrent_activation=recurrent_activation,
+        return_state=return_state,
         name=name,
         available_memory_proportion_fwd=available_memory_proportion_fwd,
         available_memory_proportion_bwd=available_memory_proportion_bwd,
@@ -774,7 +780,7 @@ class PopnnGRU(_PopnnRNN):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    outputs, *_ = gen_popnn_ops.popnn_gru_layer(
+    popnn_result = gen_popnn_ops.popnn_gru_layer(
         inputs=inputs,
         num_channels=self._num_units,
         kernel=self.kernel,
@@ -789,9 +795,7 @@ class PopnnGRU(_PopnnRNN):
         options=options,
         options_bwd=options_bwd)
 
-    output_h = self._extract_final_state(outputs)
-
-    return outputs, output_h
+    return self._make_call_result(popnn_result)
 
   def state_shape(self, batch_size):
     """Shape of Popnn GRU state.
@@ -814,6 +818,16 @@ class PopnnGRU(_PopnnRNN):
     if self._reset_after:
       return [self._num_gates_per_layer, 2, self._num_units]
     return super(PopnnGRU, self)._canonical_bias_shape(unused_layer)
+
+  def _make_call_result(self, popnn_result, seq_len=None):
+    """Takes the result from the popnn call and converts it to the correct
+    format.
+    """
+    outputs, _ = popnn_result
+    if self._return_state:
+      h_state = self._extract_final_state(outputs, seq_len)
+      return outputs, h_state
+    return outputs
 
   @property
   def saveable(self):
@@ -849,6 +863,7 @@ class PopnnDynamicGRU(PopnnGRU):
                bias_initializer=None,
                activation='tanh',
                recurrent_activation='sigmoid',
+               return_state=True,
                name=None,
                reset_after=False,
                available_memory_proportion_fwd=None,
@@ -873,6 +888,8 @@ class PopnnDynamicGRU(PopnnGRU):
       recurrent_activation: Recurrent activation function. Defaults to
         "sigmoid". Must generate output in the [0,1] range.
         Accepted values: "tanh", "softmax", "sigmoid", "hard_sigmoid".
+      return_state: Boolean. Whether to return the last state in addition to the
+        output. Default: `True`.
       name: VariableScope for the created subgraph; defaults to class name.
         This only serves the default scope if later no scope is specified when
         invoking ``__call__()``.
@@ -914,6 +931,7 @@ class PopnnDynamicGRU(PopnnGRU):
         bias_initializer=bias_initializer,
         activation=activation,
         recurrent_activation=recurrent_activation,
+        return_state=return_state,
         name=name,
         reset_after=reset_after,
         available_memory_proportion_fwd=available_memory_proportion_fwd,
@@ -972,7 +990,7 @@ class PopnnDynamicGRU(PopnnGRU):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    outputs, *_ = gen_popnn_ops.popnn_dynamic_gru_layer(
+    popnn_result = gen_popnn_ops.popnn_dynamic_gru_layer(
         inputs=inputs,
         seq_len=seq_len,
         num_channels=self._num_units,
@@ -988,9 +1006,7 @@ class PopnnDynamicGRU(PopnnGRU):
         options=options,
         options_bwd=options_bwd)
 
-    output_h = self._extract_final_state(outputs, seq_len)
-
-    return outputs, output_h
+    return self._make_call_result(popnn_result, seq_len)
 
 
 class PopnnAUGRU(PopnnGRU):
@@ -1020,6 +1036,7 @@ class PopnnAUGRU(PopnnGRU):
                bias_initializer=None,
                activation='tanh',
                recurrent_activation='sigmoid',
+               return_state=True,
                name=None,
                reset_after=False,
                available_memory_proportion_fwd=None,
@@ -1042,6 +1059,8 @@ class PopnnAUGRU(PopnnGRU):
       recurrent_activation: Recurrent activation function. Defaults to
         "sigmoid". Must generate output in the [0,1] range.
         Accepted values: "tanh", "softmax", "sigmoid", "hard_sigmoid".
+      return_state: Boolean. Whether to return the last state in addition to the
+        output. Default: `True`.
       bias_initializer: starting value to initialize the bias
         (default is all zeros).
       name: VariableScope for the created subgraph; defaults to class name.
@@ -1081,6 +1100,7 @@ class PopnnAUGRU(PopnnGRU):
         bias_initializer=bias_initializer,
         activation=activation,
         recurrent_activation=recurrent_activation,
+        return_state=return_state,
         name=name,
         reset_after=reset_after,
         available_memory_proportion_fwd=available_memory_proportion_fwd,
@@ -1148,7 +1168,7 @@ class PopnnAUGRU(PopnnGRU):
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
 
-    outputs, *_ = gen_popnn_ops.popnn_augru_layer(
+    popnn_result = gen_popnn_ops.popnn_augru_layer(
         inputs=inputs,
         att_score=attention_score,
         seq_len=seq_len,
@@ -1165,9 +1185,7 @@ class PopnnAUGRU(PopnnGRU):
         options=options,
         options_bwd=options_bwd)
 
-    output_h = self._extract_final_state(outputs, seq_len)
-
-    return outputs, output_h
+    return self._make_call_result(popnn_result, seq_len)
 
   @property
   def saveable(self):

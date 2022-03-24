@@ -18,15 +18,14 @@
 """Tests for the final state of RNN cells."""
 
 import numpy as np
+from absl.testing import parameterized
 from tensorflow.compat.v1 import disable_v2_behavior
 from tensorflow.python import keras
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import ops
 from tensorflow.python.ipu import config
-from tensorflow.python.ipu import ipu_compiler
 from tensorflow.python.ipu import scopes
 from tensorflow.python.keras.layers import recurrent_v2
-from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
 
@@ -36,6 +35,12 @@ _BATCH_SIZE = 6
 _MAX_TIME = 5
 _INPUT_SIZE = 2
 _NUM_UNITS = 3
+
+
+def as_list(value):
+  if isinstance(value, (list, tuple)):
+    return list(value)
+  return [value]
 
 
 class RnnTest(test.TestCase):
@@ -58,40 +63,45 @@ class RnnTest(test.TestCase):
     return mask
 
 
-class LstmTest(RnnTest):
-  def call_lstm_ipu(self, inputs):
-    layer = rnn_ops.PopnnLSTM(_NUM_UNITS,
-                              weights_initializer=keras.initializers.Ones(),
-                              bias_initializer=keras.initializers.Ones())
+@parameterized.named_parameters({
+    'testcase_name': f'_{return_state}',
+    'return_state': return_state,
+} for return_state in (True, False))
+class LstmTest(RnnTest, parameterized.TestCase):
+  def call_lstm_ipu(self, inputs, return_state):
+    layer = rnn_ops.PopnnLSTM(
+        _NUM_UNITS,
+        weights_initializer=keras.initializers.Ones(),
+        bias_initializer=keras.initializers.Ones(),
+        return_state=return_state,
+    )
 
     with scopes.ipu_scope("/device:IPU:0"):
-      result = ipu_compiler.compile(layer, inputs=(inputs,))
+      result = layer(inputs)
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, (c_state, h_state) = sess.run(result)
+      return as_list(sess.run(result))
 
-    return outputs, h_state, c_state
-
-  def call_dynamic_lstm_ipu(self, inputs, seq_lens):
+  def call_dynamic_lstm_ipu(self, inputs, seq_lens, return_state):
     layer = rnn_ops.PopnnDynamicLSTM(
         _NUM_UNITS,
         weights_initializer=keras.initializers.Ones(),
-        bias_initializer=keras.initializers.Ones())
+        bias_initializer=keras.initializers.Ones(),
+        return_state=return_state,
+    )
 
     with scopes.ipu_scope("/device:IPU:0"):
-      result = ipu_compiler.compile(layer, inputs=(inputs, seq_lens))
+      result = layer(inputs, seq_lens)
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, (c_state, h_state) = sess.run(result)
+      return as_list(sess.run(result))
 
-    return outputs, h_state, c_state
-
-  def call_lstm_cpu(self, inputs, mask=None):
+  def call_lstm_cpu(self, inputs, mask, return_state):
     layer = recurrent_v2.LSTM(_NUM_UNITS,
                               return_sequences=True,
-                              return_state=True,
+                              return_state=return_state,
                               kernel_initializer=keras.initializers.Ones(),
                               recurrent_initializer=keras.initializers.Ones(),
                               bias_initializer=keras.initializers.Ones(),
@@ -107,101 +117,98 @@ class LstmTest(RnnTest):
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, h_state, c_ctate = sess.run(result, feed_dict={})
+      return as_list(sess.run(result))
 
-    return outputs, h_state, c_ctate
-
-  def test_lstm(self):
+  def test_lstm(self, return_state):
     inputs = self.make_inputs()
 
-    cpu_outputs, cpu_h_state, cpu_c_ctate = self.call_lstm_cpu(inputs)
-    ipu_outputs, ipu_h_state, ipu_c_ctate = self.call_lstm_ipu(inputs)
+    cpu_result = self.call_lstm_cpu(inputs, None, return_state)
+    ipu_result = self.call_lstm_ipu(inputs, return_state)
 
-    self.assertAllClose(cpu_outputs, ipu_outputs)
-    self.assertAllClose(cpu_h_state, ipu_h_state)
-    self.assertAllClose(cpu_c_ctate, ipu_c_ctate)
+    if return_state:  # Flatten the output from the PopNN implementation.
+      ipu_result = [ipu_result[0], ipu_result[1][1], ipu_result[1][0]]
 
-  def test_dynamic_lstm(self):
+    self.assertAllClose(cpu_result, ipu_result)
+
+  def test_dynamic_lstm(self, return_state):
     inputs = self.make_inputs()
     seq_lens = self.make_seq_lens()
     inputs_mask = self.get_inputs_mask(seq_lens)
     outputs_mask = self.get_outputs_mask(inputs_mask)
 
-    cpu_outputs, cpu_h_state, cpu_c_ctate = self.call_lstm_cpu(  # pylint: disable=unused-variable
-        inputs, inputs_mask)
-    ipu_outputs, ipu_h_state, ipu_c_ctate = self.call_dynamic_lstm_ipu(  # pylint: disable=unused-variable
-        inputs, seq_lens)
+    cpu_result = self.call_lstm_cpu(inputs, inputs_mask, return_state)
+    ipu_result = self.call_dynamic_lstm_ipu(inputs, seq_lens, return_state)
+
+    if return_state:  # Flatten the output from the PopNN implementation.
+      ipu_result = [ipu_result[0], ipu_result[1][1], ipu_result[1][0]]
 
     # In the CPU LSTM layer implementation, the last valid output gets copied
     # for the remaining time-steps. Below, these values get zeroed so that the
     # output can be compared against the IPU output.
-    cpu_outputs = array_ops.where_v2(outputs_mask, cpu_outputs, 0)
+    cpu_result[0] = np.where(outputs_mask, cpu_result[0], 0)
 
-    self.assertAllEqual(outputs_mask, ipu_outputs != 0)
-    self.assertAllClose(cpu_outputs, ipu_outputs)
-    self.assertAllClose(cpu_h_state, ipu_h_state)
-    # TODO(T41670): Enable this case.
-    # self.assertAllClose(cpu_c_ctate, ipu_c_ctate)
+    self.assertAllEqual(outputs_mask, ipu_result[0] != 0)
+    self.assertAllClose(cpu_result, ipu_result)
 
 
-class GruTest(RnnTest):
+@parameterized.named_parameters({
+    'testcase_name': f'_{return_state}',
+    'return_state': return_state,
+} for return_state in (True, False))
+class GruTest(RnnTest, parameterized.TestCase):
   def make_attention_score(self):
     score = np.random.normal(0, 1, (_MAX_TIME, _BATCH_SIZE))
     return score.astype(np.float32)
 
-  def call_gru_ipu(self, inputs):
+  def call_gru_ipu(self, inputs, return_state):
     layer = rnn_ops.PopnnGRU(
         _NUM_UNITS,
         weights_initializer=keras.initializers.Ones(),
         bias_initializer=keras.initializers.Ones(),
+        return_state=return_state,
     )
 
     with scopes.ipu_scope("/device:IPU:0"):
-      result = ipu_compiler.compile(layer, inputs=(inputs,))
+      result = layer(inputs)
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, h_state = sess.run(result)
+      return as_list(sess.run(result))
 
-    return outputs, h_state
-
-  def call_dynamic_gru_ipu(self, inputs, seq_lens):
+  def call_dynamic_gru_ipu(self, inputs, seq_lens, return_state):
     layer = rnn_ops.PopnnDynamicGRU(
         _NUM_UNITS,
         weights_initializer=keras.initializers.Ones(),
         bias_initializer=keras.initializers.Ones(),
+        return_state=return_state,
     )
 
     with scopes.ipu_scope("/device:IPU:0"):
-      result = ipu_compiler.compile(layer, inputs=(inputs, seq_lens))
+      result = layer(inputs, seq_lens)
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, h_state = sess.run(result)
+      return as_list(sess.run(result))
 
-    return outputs, h_state
-
-  def call_augru_ipu(self, inputs, seq_lens, attention_score):
+  def call_augru_ipu(self, inputs, seq_lens, attention_score, return_state):
     layer = rnn_ops.PopnnAUGRU(
         _NUM_UNITS,
         weights_initializer=keras.initializers.Ones(),
         bias_initializer=keras.initializers.Ones(),
+        return_state=return_state,
     )
 
     with scopes.ipu_scope("/device:IPU:0"):
-      result = ipu_compiler.compile(layer,
-                                    inputs=(inputs, seq_lens, attention_score))
+      result = layer(inputs, seq_lens, attention_score)
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, h_state = sess.run(result)
+      return as_list(sess.run(result))
 
-    return outputs, h_state
-
-  def call_gru_cpu(self, inputs, mask=None):
+  def call_gru_cpu(self, inputs, mask, return_state):
     layer = recurrent_v2.GRU(_NUM_UNITS,
                              return_sequences=True,
-                             return_state=True,
+                             return_state=return_state,
                              kernel_initializer=keras.initializers.Ones(),
                              recurrent_initializer=keras.initializers.Ones(),
                              bias_initializer=keras.initializers.Ones(),
@@ -218,49 +225,46 @@ class GruTest(RnnTest):
 
     with self.session() as sess:
       sess.run(variables.global_variables_initializer())
-      outputs, h_state = sess.run(result, feed_dict={})
+      return as_list(sess.run(result))
 
-    return outputs, h_state
-
-  def test_gru(self):
+  def test_gru(self, return_state):
     inputs = self.make_inputs()
 
-    cpu_outputs, cpu_h_state = self.call_gru_cpu(inputs)
-    ipu_outputs, ipu_h_state = self.call_gru_ipu(inputs)
+    cpu_result = self.call_gru_cpu(inputs, None, return_state)
+    ipu_result = self.call_gru_ipu(inputs, return_state)
 
-    self.assertAllClose(cpu_outputs, ipu_outputs)
-    self.assertAllClose(cpu_h_state, ipu_h_state)
+    self.assertAllClose(cpu_result, ipu_result)
 
-  def test_dynamic_gru(self):
+  def test_dynamic_gru(self, return_state):
     inputs = self.make_inputs()
     seq_lens = self.make_seq_lens()
     inputs_mask = self.get_inputs_mask(seq_lens)
     outputs_mask = self.get_outputs_mask(inputs_mask)
 
-    cpu_outputs, cpu_h_state = self.call_gru_cpu(inputs, inputs_mask)
-    ipu_outputs, ipu_h_state = self.call_dynamic_gru_ipu(inputs, seq_lens)
+    cpu_result = self.call_gru_cpu(inputs, inputs_mask, return_state)
+    ipu_result = self.call_dynamic_gru_ipu(inputs, seq_lens, return_state)
 
     # In the CPU GRU layer implementation, the last valid output gets copied for
     # the remaining time-steps. Below, these values get zeroed so that the
     # output can be compared against the IPU output.
-    cpu_outputs = array_ops.where_v2(outputs_mask, cpu_outputs, 0)
+    cpu_result[0] = np.where(outputs_mask, cpu_result[0], 0)
 
-    self.assertAllEqual(outputs_mask, ipu_outputs != 0)
-    self.assertAllClose(cpu_outputs, ipu_outputs)
-    self.assertAllClose(cpu_h_state, ipu_h_state)
+    self.assertAllEqual(outputs_mask, ipu_result[0] != 0)
+    self.assertAllClose(cpu_result, ipu_result)
 
-  def test_augru(self):
+  def test_augru(self, return_state):
     inputs = self.make_inputs()
     seq_lens = self.make_seq_lens()
     inputs_mask = self.get_inputs_mask(seq_lens)
     outputs_mask = self.get_outputs_mask(inputs_mask)
     attention_score = self.make_attention_score()
 
-    ipu_outputs, ipu_h_state = self.call_augru_ipu(inputs, seq_lens,
-                                                   attention_score)
+    ipu_result = self.call_augru_ipu(inputs, seq_lens, attention_score,
+                                     return_state)
 
-    self.assertAllEqual(outputs_mask, ipu_outputs != 0)
-    self.assertNotAllEqual(ipu_h_state, 0)
+    self.assertAllEqual(outputs_mask, ipu_result[0] != 0)
+    if return_state:
+      self.assertNotAllEqual(ipu_result[1], 0)
 
 
 if __name__ == '__main__':
@@ -268,7 +272,7 @@ if __name__ == '__main__':
 
   # Configure IPUs
   cfg = config.IPUConfig()
-  cfg.auto_select_ipus = 1
+  cfg.ipu_model.compile_ipu_code = False
   cfg.configure_ipu_system()
 
   test.main()
