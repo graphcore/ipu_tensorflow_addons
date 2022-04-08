@@ -35,6 +35,16 @@ py_test(
 )
 
 py_test(
+    name = "options_test",
+    srcs = [
+        "converter/autograph/options_test.py",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
     name = "ipu_placement_test",
     srcs = [
         "converter/ipu_placement_test.py",

@@ -15,7 +15,9 @@
 #
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
+import math
 from tensorflow import as_dtype
+from tensorflow.python import ipu
 from tensorflow.python.platform import gfile
 from tensorflow.python import ops
 from tensorflow.python.client import session
@@ -76,3 +78,45 @@ def tf_type_to_str_type(tf_type):
 
 def str_type_to_tf_type(str_type):
   return as_dtype(str_type)
+
+
+def get_ipu_config(num_required_ipus=1,
+                   ipu_id=None,
+                   matmul_amp=None,
+                   conv_amp=None,
+                   matmul_partial_type=None,
+                   conv_partial_type=None):
+
+  cfg = ipu.config.IPUConfig()
+
+  if ipu_id:
+    cfg.select_ipus = [ipu_id]
+  else:
+    cfg.auto_select_ipus = num_required_ipus
+
+  if matmul_amp:
+    cfg.matmuls.poplar_options.update(
+        {"availableMemoryProportion": str(matmul_amp)})
+
+  if matmul_partial_type:
+    cfg.matmuls.poplar_options.update({"partialsType": matmul_partial_type})
+
+  if conv_amp:
+    cfg.convolutions.poplar_options.update(
+        {"availableMemoryProportion": str(matmul_amp)})
+
+  if conv_partial_type:
+    cfg.convolutions.poplar_options.update(
+        {"partialsType": matmul_partial_type})
+
+  return cfg
+
+
+def configure_ipu(config):
+  if isinstance(config, ipu.config.IPUConfig):
+    return config.configure_ipu_system()
+  raise TypeError("Config should be of type `ipu.config.IPUConfig`.")
+
+
+def next_power_of_two(x):
+  return 2**int(math.ceil(math.log2(x)))

@@ -14,3 +14,4 @@
 # ==============================================================================
 
 from ipu_tensorflow_addons.saved_model_tool.converter.autograph.tfv1graph import Graph, TFv1Graph, Node, Input, Output
+from ipu_tensorflow_addons.saved_model_tool.converter.autograph.options import RunConfig
