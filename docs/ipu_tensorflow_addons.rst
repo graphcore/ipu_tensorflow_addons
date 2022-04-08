@@ -1,3 +1,5 @@
+.. _ipu-tensorflow-addons:
+
 IPU TensorFlow Addons
 ---------------------
 
