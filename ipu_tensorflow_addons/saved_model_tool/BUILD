@@ -1,5 +1,10 @@
 package(default_visibility = ["//ipu_tensorflow_addons:__pkg__"])
 
+filegroup(
+    name = "profile_test_data",
+    srcs = glob(["testdata/**"]),
+)
+
 py_library(
     name = "saved_model_tool",
     srcs = [
@@ -21,6 +26,21 @@ py_library(
         ["converter/autograph/**/*.py"],
         exclude = ["converter/autograph/**/*_test.py"],
     ),
+)
+
+py_test(
+    name = "profile_test",
+    srcs = [
+        "converter/autograph/profile_test.py",
+        "saved_model_test_utils.py",
+    ],
+    data = [
+        ":profile_test_data",
+    ],
+    deps = [
+        ":saved_model_tool",
+        "//ipu_tensorflow_addons/test_utils",
+    ],
 )
 
 py_test(

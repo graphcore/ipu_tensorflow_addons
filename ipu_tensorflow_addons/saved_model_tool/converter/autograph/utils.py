@@ -16,6 +16,8 @@
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
 import math
+import os
+import inspect
 from tensorflow import as_dtype
 from tensorflow.python import ipu
 from tensorflow.python.platform import gfile
@@ -120,3 +122,9 @@ def configure_ipu(config):
 
 def next_power_of_two(x):
   return 2**int(math.ceil(math.log2(x)))
+
+
+def frame_info():
+  """Returns the current line number in our program."""
+  uplevel_frame = inspect.getouterframes(inspect.currentframe())[2]
+  return f"{os.path.basename(uplevel_frame.filename)}:{uplevel_frame.lineno}"
