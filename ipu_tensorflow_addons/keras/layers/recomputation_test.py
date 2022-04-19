@@ -19,6 +19,7 @@
 
 import pva
 from tensorflow.python import ipu
+from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python import keras
 from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.framework import constant_op
@@ -26,7 +27,6 @@ from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 from tensorflow.python.training import gradient_descent
 
-from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons.keras import layers
 
 

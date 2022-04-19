@@ -18,13 +18,13 @@
 
 import numpy as np
 from tensorflow.python import ipu
+from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python.client import session as sl
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
 
-from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons.keras import layers
 
 

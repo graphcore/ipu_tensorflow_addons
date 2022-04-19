@@ -46,9 +46,4 @@ py_test(
 
 test_suite(
     name = "all_tests",
-    tests = [
-        "keras_adam_optimizer_test",
-        "keras_lamb_optimizer_test",
-        "keras_sgd_optimizer_test",
-    ],
 )

@@ -9,6 +9,4 @@ py_library(
 
 test_suite(
     name = "all_tests",
-    tests = [
-    ],
 )

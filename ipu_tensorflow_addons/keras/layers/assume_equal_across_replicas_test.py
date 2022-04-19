@@ -20,6 +20,7 @@ from unittest import mock
 import numpy as np
 from absl.testing import parameterized
 from tensorflow.python import ipu
+from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python import keras
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import test_util
@@ -28,8 +29,6 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.platform import googletest
-
-from ipu_tensorflow_addons import test_utils as tu
 
 
 def create_n_replica_ipu_config(ipu_count):

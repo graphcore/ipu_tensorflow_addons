@@ -20,6 +20,7 @@
 
 from absl.testing import parameterized
 from tensorflow.python import ipu
+from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
@@ -37,7 +38,6 @@ from tensorflow.python.training import gradient_descent
 import numpy as np
 import pva
 
-from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons.v1 import layers
 
 DATA_TYPE = np.float32

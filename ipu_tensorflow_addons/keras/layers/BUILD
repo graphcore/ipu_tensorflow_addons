@@ -24,7 +24,6 @@ py_test(
     tags = ["hw_poplar_test_2_ipus"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -81,7 +80,6 @@ py_test(
     tags = ["isolated_poplar_tests"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -100,7 +98,6 @@ py_test(
     tags = ["hw_poplar_test_1_ipus"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 

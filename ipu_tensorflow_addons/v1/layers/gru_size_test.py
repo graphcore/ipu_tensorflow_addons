@@ -23,6 +23,7 @@ from __future__ import print_function
 import os
 import numpy as np
 from tensorflow.python import ipu
+from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
@@ -33,7 +34,6 @@ from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
 import pva
 
-from ipu_tensorflow_addons import test_utils as tu
 from ipu_tensorflow_addons.v1 import layers
 
 dataType = np.float16
