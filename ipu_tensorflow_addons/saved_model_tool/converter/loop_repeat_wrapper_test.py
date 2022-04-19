@@ -26,8 +26,8 @@ from tensorflow.python.ops import (array_ops, init_ops, math_ops, nn,
                                    variable_scope)
 from tensorflow.python.platform import test
 from tensorflow.python.ipu.sharding_utils import set_ipu_shard
+from tensorflow.python.ipu import test_utils as tu
 
-from ipu_tensorflow_addons.test_utils import test_uses_ipus
 from ipu_tensorflow_addons.saved_model_tool.converter import LoopRepeatWrapper
 from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuConversionParams
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest, declare_signature
@@ -230,7 +230,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     self.assertProtoEquals(graph_def, self.multiple_output_model.graph_def)
     self.assertProtoEquals(signature, self.multiple_output_model.signature_def)
 
-  @test_uses_ipus(1)
+  @tu.test_uses_ipus(1)
   def test_not_add_cast_apply(self):
     graph_def, signature = self.converter.apply(self.model.graph_def,
                                                 self.model.signature_def)
@@ -240,7 +240,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     self.assertIn("ApplicationCall", op_type_list)
     self.assertProtoEquals(signature, self.model.signature_def)
 
-  @test_uses_ipus(1)
+  @tu.test_uses_ipus(1)
   def test_add_cast_to_io_apply(self):
     self.model.modify_io_float16()
 
@@ -252,7 +252,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     self.assertIn("ApplicationCall", op_type_list)
     self.assertProtoEquals(signature, self.model.signature_def)
 
-  @test_uses_ipus(2)
+  @tu.test_uses_ipus(2)
   def test_sharded_model_apply(self):
     sharded_graph_def = self.model.set_ipu_shard()
 
@@ -260,7 +260,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
                                                       self.model.signature_def)
     dtype_same_as_(graph_def, signature, self.assertEqual)
 
-  @test_uses_ipus(1)
+  @tu.test_uses_ipus(1)
   def test_multiple_input_and_outputs(self):
     self.multiple_output_model.modify_signature()
     graph_def, signature = self.converter.apply(
@@ -269,7 +269,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
 
     dtype_same_as_(graph_def, signature, self.assertEqual)
 
-  @test_uses_ipus(1)
+  @tu.test_uses_ipus(1)
   def test_mutual_exclusion_with_ipuwrapper(self):
     converter = LoopRepeatWrapper(
         IpuConversionParams(batch_size=1,
@@ -302,7 +302,7 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     self.assertNotEqual(graph_def, self.model.graph_def)
     self.assertEqual(signature, self.model.signature_def)
 
-  @test_uses_ipus(1)
+  @tu.test_uses_ipus(1)
   def test_unique_engine_name(self):
     def find_app_call(graph_def):
       for node in graph_def.node:

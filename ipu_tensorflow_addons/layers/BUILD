@@ -14,7 +14,6 @@ py_test(
     srcs = ["gru_size_test.py"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -24,7 +23,6 @@ py_test(
     srcs = ["gru_training_test.py"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -34,7 +32,6 @@ py_test(
     srcs = ["lstm_size_test.py"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -44,7 +41,6 @@ py_test(
     srcs = ["lstm_training_test.py"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -54,17 +50,9 @@ py_test(
     srcs = ["rnn_final_state_test.py"],
     deps = [
         ":layers",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
 test_suite(
     name = "all_tests",
-    tests = [
-        "gru_size_test",
-        "gru_training_test",
-        "lstm_size_test",
-        "lstm_training_test",
-        "rnn_final_state_test",
-    ],
 )

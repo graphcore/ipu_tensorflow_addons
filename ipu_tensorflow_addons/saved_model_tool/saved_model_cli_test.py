@@ -38,9 +38,9 @@ from tensorflow.compiler.xla import xla_data_pb2
 from tensorflow.core.framework import attr_value_pb2
 from tensorflow.core.framework import types_pb2
 from tensorflow.compiler.plugin.poplar.driver import config_pb2
+from tensorflow.python.ipu import test_utils as tu
 from ipu_tensorflow_addons.saved_model_tool import saved_model_cli
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import ModelForTest
-from ipu_tensorflow_addons import test_utils as tu
 
 
 def check_sharding_num(node, index):

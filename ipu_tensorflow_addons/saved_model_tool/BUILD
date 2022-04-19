@@ -39,7 +39,6 @@ py_test(
     ],
     deps = [
         ":saved_model_tool",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -106,7 +105,6 @@ py_test(
     tags = ["hw_poplar_test_2_ipus"],
     deps = [
         ":saved_model_tool",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
@@ -152,7 +150,6 @@ py_test(
     tags = ["hw_poplar_test_1_ipus"],
     deps = [
         ":saved_model_tool",
-        "//ipu_tensorflow_addons/test_utils",
     ],
 )
 
