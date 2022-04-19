@@ -21,12 +21,14 @@ from ipu_tensorflow_addons.saved_model_tool.converter import IPUCompilerWrapper
 from ipu_tensorflow_addons.saved_model_tool.converter import ManualSharding
 from ipu_tensorflow_addons.saved_model_tool.converter import Int64Conversion
 from ipu_tensorflow_addons.saved_model_tool.converter import LoopRepeatWrapper
+from ipu_tensorflow_addons.saved_model_tool.converter import GeluReplacement
 
 
 class ConverterPipeline():
   # pylint: disable=unused-argument
   def __init__(self, param, signatrue_key):
     self._converters = list()
+    self._converters.append(GeluReplacement(param))
     self._converters.append(IPUPlacement(param))
     self._converters.append(Int64Conversion(param))
     self._converters.append(PrecisionConversion(param))

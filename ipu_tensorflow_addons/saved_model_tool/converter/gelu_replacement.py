@@ -67,8 +67,8 @@ class GeluReplacement(Converter):
     ipu_gelu_node_name = None
     replaced_gelu = list()
     for node in target_graph_def.node:
-      for node_pattern in self._node_as_gelu_input:
-        if re.search(node_pattern,
+      for input_node_pattern in self._node_as_gelu_input:
+        if re.search(input_node_pattern,
                      node.name) and node.name not in replaced_gelu:
           ipu_gelu_node = target_graph_def.node.add()
           ipu_gelu_node.op = 'IpuGelu'
@@ -86,10 +86,9 @@ class GeluReplacement(Converter):
           ipu_gelu_node_name = ipu_gelu_node.name
           break
 
-    # Connect Gelu node.
-    for node in target_graph_def.node:
-      for node_pattern in self._node_use_gelu_output:
-        if re.search(node_pattern, node.name):
+      # Connect Gelu node.
+      for output_node_pattern in self._node_use_gelu_output:
+        if re.search(output_node_pattern, node.name):
           for idx, _input in enumerate(node.input):
             if any(re.search(pattern, _input) for pattern in self._gelu_nodes):
               node.input[idx] = ipu_gelu_node_name

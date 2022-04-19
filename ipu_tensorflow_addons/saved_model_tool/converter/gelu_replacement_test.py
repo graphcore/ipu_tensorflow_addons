@@ -28,6 +28,7 @@ from ipu_tensorflow_addons.saved_model_tool.ipu_convert import IpuConversionPara
 from ipu_tensorflow_addons.saved_model_tool.converter import GeluReplacement
 from ipu_tensorflow_addons.saved_model_tool.saved_model_test_utils import \
     ModelForTest
+
 disable_v2_behavior()
 
 
@@ -48,11 +49,70 @@ class TestSavedmodel(ModelForTest):
     return y
 
 
+class TestSavedmodelParallelGelu(ModelForTest):
+  def create(self):
+    def gelu(x):
+      cdf = 0.5 * (1.0 + math_ops.tanh(
+          (numpy.sqrt(2 / numpy.pi) * (x + 0.044715 * math_ops.pow(x, 3)))))
+      return x * cdf
+
+    x = array_ops.placeholder(dtypes.float32, [8, 8], name="x")
+    w0 = variable_scope.get_variable("w0", shape=[8, 8], dtype=dtypes.float32)
+    w1 = variable_scope.get_variable("w1", shape=[8, 8], dtype=dtypes.float32)
+    with name_scope("gelu0/"):
+      x0 = math_ops.add(x, w0, name='BiasAdd')
+      x0 = gelu(x0)
+    with name_scope("gelu1/"):
+      x1 = math_ops.add(x, w1, name='BiasAdd')
+      x1 = gelu(x1)
+    with name_scope("gelu0_end/"):
+      y0 = math_ops.matmul(w0, x0)
+    with name_scope("gelu1_end/"):
+      y1 = math_ops.matmul(w1, x1)
+
+    y = math_ops.add(y0, y1, name='result')
+    return y
+
+
+class TestSavedmodelConcurrentGelu(ModelForTest):
+  def create(self):
+    def gelu(x):
+      cdf = 0.5 * (1.0 + math_ops.tanh(
+          (numpy.sqrt(2 / numpy.pi) * (x + 0.044715 * math_ops.pow(x, 3)))))
+      return x * cdf
+
+    x = array_ops.placeholder(dtypes.float32, [8, 8], name="x")
+    w0 = variable_scope.get_variable("w0", shape=[8, 8], dtype=dtypes.float32)
+    w1 = variable_scope.get_variable("w1", shape=[8, 8], dtype=dtypes.float32)
+    with name_scope("gelu0/"):
+      x = math_ops.add(x, w0, name='BiasAdd')
+      x = gelu(x)
+    with name_scope("gelu_end1/"):
+      x = math_ops.matmul(w0, x)
+
+    with name_scope("gelu1/"):
+      x = math_ops.add(x, w1, name='BiasAdd')
+      x = gelu(x)
+    with name_scope("gelu_end1/"):
+      y = math_ops.matmul(w1, x)
+
+    return y
+
+
 class GeluReplacementTestCase(test_util.TensorFlowTestCase):
   def setUp(self):
     self.test_model = TestSavedmodel(freeze=True)
     self.test_graph_def = self.test_model.graph_def
     self.test_signature_def = self.test_model.signature_def
+
+    self.test_model_concurrent = TestSavedmodelConcurrentGelu(freeze=True)
+    self.test_concurrent_graph_def = self.test_model_concurrent.graph_def
+    self.test_concurrent_signature_def = \
+      self.test_model_concurrent.signature_def
+
+    self.test_model_parallel = TestSavedmodelParallelGelu(freeze=True)
+    self.test_parallel_graph_def = self.test_model_parallel.graph_def
+    self.test_parallel_signature_def = self.test_model_parallel.signature_def
 
   def graph2tensor(self, graph_def, feed_dict, output_name):
     with ops.Graph().as_default():
@@ -91,6 +151,40 @@ class GeluReplacementTestCase(test_util.TensorFlowTestCase):
 
     ipu_gelus = [n for n in graph_def.node if n.op == "IpuGelu"]
     self.assertTrue(len(ipu_gelus) == 1)
+
+  def test_concurrent_gelu_replace(self):
+    graph_def = self.test_model_concurrent.graph_def
+    signature_def = self.test_model_concurrent.signature_def
+
+    gelu_replacement = dict()
+    gelu_replacement["nodes"] = [
+        "Pow$", "mul$", "add$", "mul_1$", "Tanh$", "add_1$", "mul_2$", "mul_3$"
+    ]
+    gelu_replacement["node_as_gelu_input"] = ["BiasAdd"]
+    gelu_replacement["node_use_gelu_output"] = ["MatMul"]
+
+    params = IpuConversionParams(gelu_replacement=gelu_replacement)
+    graph_def, _ = GeluReplacement(params).apply(graph_def, signature_def)
+
+    with ops.Graph().as_default():
+      importer.import_graph_def(graph_def)
+
+  def test_parallel_gelu_replace(self):
+    graph_def = self.test_model_parallel.graph_def
+    signature_def = self.test_model_parallel.signature_def
+
+    gelu_replacement = dict()
+    gelu_replacement["nodes"] = [
+        "Pow$", "mul$", "add$", "mul_1$", "Tanh$", "add_1$", "mul_2$", "mul_3$"
+    ]
+    gelu_replacement["node_as_gelu_input"] = ["BiasAdd"]
+    gelu_replacement["node_use_gelu_output"] = ["MatMul"]
+
+    params = IpuConversionParams(gelu_replacement=gelu_replacement)
+    graph_def, _ = GeluReplacement(params).apply(graph_def, signature_def)
+
+    with ops.Graph().as_default():
+      importer.import_graph_def(graph_def)
 
 
 if __name__ == '__main__':
