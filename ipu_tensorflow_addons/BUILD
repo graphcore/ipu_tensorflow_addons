@@ -12,14 +12,3 @@ py_library(
         "//ipu_tensorflow_addons/v1/optimizers",
     ],
 )
-
-test_suite(
-    name = "all_tests",
-    tests = [
-        "//docs:all_tests",
-        "//ipu_tensorflow_addons/keras/layers:all_tests",
-        "//ipu_tensorflow_addons/keras/optimizers:all_tests",
-        "//ipu_tensorflow_addons/v1/layers:all_tests",
-        "//ipu_tensorflow_addons/v1/optimizers:all_tests",
-    ],
-)

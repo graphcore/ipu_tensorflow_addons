@@ -43,7 +43,3 @@ py_test(
     shard_count = 3,
     deps = [":optimizers"],
 )
-
-test_suite(
-    name = "all_tests",
-)

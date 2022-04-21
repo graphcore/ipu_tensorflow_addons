@@ -10,7 +10,3 @@ py_test(
     ],
     deps = ["//ipu_tensorflow_addons"],
 )
-
-test_suite(
-    name = "all_tests",
-)

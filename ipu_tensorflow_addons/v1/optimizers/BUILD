@@ -6,7 +6,3 @@ py_library(
         "__init__.py",
     ],
 )
-
-test_suite(
-    name = "all_tests",
-)
