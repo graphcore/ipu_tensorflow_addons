@@ -152,7 +152,3 @@ py_test(
         ":saved_model_tool",
     ],
 )
-
-test_suite(
-    name = "all_tests",
-)

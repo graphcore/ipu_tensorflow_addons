@@ -52,7 +52,3 @@ py_test(
         ":layers",
     ],
 )
-
-test_suite(
-    name = "all_tests",
-)
