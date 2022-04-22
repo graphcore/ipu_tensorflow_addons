@@ -17,26 +17,17 @@
 # ==============================================================================
 
 # Naive LSTM to learn three-char time steps to one-char mapping
+
+import pva
+import numpy as np
+import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python.framework import errors
-from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.ipu import utils
 from tensorflow.python.ipu.config import IPUConfig
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
-from tensorflow.python.training import gradient_descent
-import numpy as np
-import pva
-
 from ipu_tensorflow_addons import layers
 
 DATA_TYPE = np.float32
@@ -54,16 +45,15 @@ def _PopnnLSTM(x, h, c, y, sequence_len=None, num_hidden=NUM_HIDDEN, **kwargs):
   lstm_cell = layers.PopnnLSTM(
       num_hidden,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       **kwargs)
-  state = rnn_cell.LSTMStateTuple(c, h)
+  state = tf.nn.rnn_cell.LSTMStateTuple(c, h)
   outputs, _ = lstm_cell(x, initial_state=state, training=True)
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -77,38 +67,36 @@ def _PopnnLSTM_DynamicLSTM(x,
   lstm_cell = layers.PopnnDynamicLSTM(
       num_hidden,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       **kwargs)
-  state = rnn_cell.LSTMStateTuple(c, h)
+  state = tf.nn.rnn_cell.LSTMStateTuple(c, h)
   outputs, _ = lstm_cell(x, sequence_len, initial_state=state, training=True)
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
 def _tfLSTM(x, h, c, y, sequence_len=None, num_hidden=NUM_HIDDEN, **kwargs):
-  lstm_cell = rnn_cell.LSTMCell(
+  lstm_cell = tf.nn.rnn_cell.LSTMCell(
       num_hidden,
       name='basic_lstm_cell',
       forget_bias=0.,
-      initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       **kwargs)
-  state = rnn_cell.LSTMStateTuple(c, h)
-  outputs, _ = rnn.dynamic_rnn(lstm_cell,
-                               x,
-                               sequence_length=sequence_len,
-                               dtype=DATA_TYPE,
-                               initial_state=state,
-                               time_major=True)
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  state = tf.nn.rnn_cell.LSTMStateTuple(c, h)
+  outputs, _ = tf.nn.dynamic_rnn(lstm_cell,
+                                 x,
+                                 sequence_length=sequence_len,
+                                 dtype=DATA_TYPE,
+                                 initial_state=state,
+                                 time_major=True)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -155,16 +143,16 @@ class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
                  num_training_steps=NUM_TRAINING_STEPS,
                  **kwargs):
     with self.session() as sess:
-      with ops.device('cpu'):
-        px = array_ops.placeholder(DATA_TYPE, shape=x.shape)
-        ph = array_ops.placeholder(DATA_TYPE, shape=[batch_size, num_hidden])
-        pc = array_ops.placeholder(DATA_TYPE, shape=[batch_size, num_hidden])
-        py = array_ops.placeholder(DATA_TYPE, shape=y.shape)
+      with tf.device('cpu'):
+        px = tf.placeholder(DATA_TYPE, shape=x.shape)
+        ph = tf.placeholder(DATA_TYPE, shape=[batch_size, num_hidden])
+        pc = tf.placeholder(DATA_TYPE, shape=[batch_size, num_hidden])
+        py = tf.placeholder(DATA_TYPE, shape=y.shape)
 
         compile_inputs = [px, ph, pc, py]
         fd = {px: x, ph: np.ones(ph.shape), pc: np.ones(pc.shape), py: y}
         if s is not None:
-          ps = array_ops.placeholder(np.int32, shape=s.shape)
+          ps = tf.placeholder(np.int32, shape=s.shape)
           compile_inputs.append(ps)
           fd[ps] = s
 
@@ -175,7 +163,7 @@ class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
         r = ipu.ipu_compiler.compile(wrapped_layer_func, inputs=compile_inputs)
 
       utils.move_variable_initialization_to_cpu()
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       losses = []
       for _ in range(0, num_training_steps):
         loss = sess.run(r, fd)
@@ -242,7 +230,7 @@ class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     if valid_value:
       run_lstm({'availableMemoryProportion': 0.8})()
     else:
-      self.assertRaisesRegex(errors.InternalError,
+      self.assertRaisesRegex(tf.errors.InternalError,
                              "Value must be greater than or equal to 0",
                              run_lstm({'availableMemoryProportion': -123.}))
 
@@ -316,13 +304,14 @@ class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     name = ("" if valid_value else "in") + "validAvailableMemoryProportionBwd"
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       if valid_value:
         self._run_lstm_single_training_step(
             name=name, options_bwd={'availableMemoryProportion': 0.7})
       else:
         with self.assertRaisesRegex(
-            errors.InternalError, "Value must be greater than or equal to 0"):
+            tf.errors.InternalError,
+            "Value must be greater than or equal to 0"):
           self._run_lstm_single_training_step(
               name=name, options_bwd={'availableMemoryProportion': -123.})
 

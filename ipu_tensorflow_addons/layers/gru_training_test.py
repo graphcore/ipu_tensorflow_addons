@@ -18,26 +18,16 @@
 
 # Naive GRU to learn three-char time steps to one-char mapping
 
+import pva
+import numpy as np
+import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python.framework import errors
-from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.ipu import utils
 from tensorflow.python.ipu.config import IPUConfig
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
-from tensorflow.python.training import gradient_descent
-import numpy as np
-import pva
-
 from ipu_tensorflow_addons import layers
 
 DATA_TYPE = np.float32
@@ -60,16 +50,15 @@ def _PopnnGRU(x,
   gru_cell = layers.PopnnGRU(
       num_hidden,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       reset_after=False,
       **kwargs)
   outputs, _ = gru_cell(x, initial_state=initial_state, training=True)
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -83,8 +72,8 @@ def _PopnnGRU_DynamicGRU(x,
   gru_cell = layers.PopnnDynamicGRU(
       num_hidden,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       reset_after=False,
       **kwargs)
   outputs, _ = gru_cell(x,
@@ -92,11 +81,10 @@ def _PopnnGRU_DynamicGRU(x,
                         initial_state=initial_state,
                         training=True)
 
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -110,16 +98,15 @@ def _PopnnGRU_ResetAfter(x,
   gru_cell = layers.PopnnGRU(
       num_hidden,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       reset_after=True,
       **kwargs)
   outputs, _ = gru_cell(x, initial_state=initial_state, training=True)
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -129,24 +116,23 @@ def _tfGRU(x,
            sequence_len=None,
            num_hidden=NUM_HIDDEN,
            **kwargs):
-  gru_cell = rnn_cell.GRUCell(
+  gru_cell = tf.nn.rnn_cell.GRUCell(
       num_hidden,
       name='gru_cell',
-      kernel_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
+      kernel_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
       **kwargs)
-  outputs, _ = rnn.dynamic_rnn(gru_cell,
-                               x,
-                               sequence_length=sequence_len,
-                               dtype=DATA_TYPE,
-                               initial_state=initial_state,
-                               time_major=True)
+  outputs, _ = tf.nn.dynamic_rnn(gru_cell,
+                                 x,
+                                 sequence_length=sequence_len,
+                                 dtype=DATA_TYPE,
+                                 initial_state=initial_state,
+                                 time_major=True)
 
-  softmax = nn.softmax_cross_entropy_with_logits_v2(
-      logits=outputs[-1], labels=array_ops.stop_gradient(y))
-  loss = math_ops.reduce_mean(softmax)
-  train = gradient_descent.GradientDescentOptimizer(LEARNING_RATE).minimize(
-      loss)
+  softmax = tf.nn.softmax_cross_entropy_with_logits_v2(
+      logits=outputs[-1], labels=tf.stop_gradient(y))
+  loss = tf.reduce_mean(softmax)
+  train = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
   return [loss, train]
 
 
@@ -192,16 +178,15 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
                  num_training_steps=NUM_TRAINING_STEPS,
                  **kwargs):
     with self.session() as sess:
-      with ops.device('cpu'):
-        px = array_ops.placeholder(DATA_TYPE, shape=x.shape)
-        pi_state = array_ops.placeholder(DATA_TYPE,
-                                         shape=[batch_size, num_hidden])
-        py = array_ops.placeholder(DATA_TYPE, shape=y.shape)
+      with tf.device('cpu'):
+        px = tf.placeholder(DATA_TYPE, shape=x.shape)
+        pi_state = tf.placeholder(DATA_TYPE, shape=[batch_size, num_hidden])
+        py = tf.placeholder(DATA_TYPE, shape=y.shape)
         compile_inputs = [px, pi_state, py]
         fd = {px: x, pi_state: np.zeros(pi_state.shape), py: y}
 
         if s is not None:
-          ps = array_ops.placeholder(np.int32, shape=s.shape)
+          ps = tf.placeholder(np.int32, shape=s.shape)
           compile_inputs.append(ps)
           fd[ps] = s
 
@@ -212,7 +197,7 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
         r = ipu.ipu_compiler.compile(wrapped_layer_func, inputs=compile_inputs)
 
       utils.move_variable_initialization_to_cpu()
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       losses = []
       for _ in range(0, num_training_steps):
         loss = sess.run(r, fd)
@@ -283,7 +268,7 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     if valid_value:
       run_gru({'availableMemoryProportion': 0.8})()
     else:
-      self.assertRaisesRegex(errors.InternalError,
+      self.assertRaisesRegex(tf.errors.InternalError,
                              "Value must be greater than or equal to 0",
                              run_gru({'availableMemoryProportion': -123.}))
 
@@ -367,7 +352,8 @@ class GRUTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
             name=name, options_bwd={'availableMemoryProportion': 0.7})
       else:
         with self.assertRaisesRegex(
-            errors.InternalError, "Value must be greater than or equal to 0"):
+            tf.errors.InternalError,
+            "Value must be greater than or equal to 0"):
           self._run_single_gru_training_step(
               name=name, options_bwd={'availableMemoryProportion': -123.})
 

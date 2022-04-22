@@ -22,16 +22,9 @@ Popnn recurrent neural network operators
 import json
 import logging
 
+import tensorflow as tf
 from tensorflow.compiler.plugin.poplar.ops import gen_popnn_ops
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
 from tensorflow.python.layers import base as base_layer
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.ipu.ops import op_util
 from tensorflow.python.util import deprecation
 
@@ -64,8 +57,8 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
   def __init__(
       self,
       num_units,
-      dtype=dtypes.float32,
-      partials_dtype=dtypes.float32,
+      dtype=tf.float32,
+      partials_dtype=tf.float32,
       seed=None,
       weights_initializer=None,
       bias_initializer=None,
@@ -131,7 +124,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     if available_memory_proportion_bwd is None:
       available_memory_proportion_bwd = available_memory_proportion_fwd
 
-    if dtype not in [dtypes.float16, dtypes.float32]:
+    if dtype not in [tf.float16, tf.float32]:
       raise ValueError("Only support float16, float32, provided %s" % dtype)
     # Layer self.dtype is type name, the original DType object is kept here.
     self._plain_dtype = dtype
@@ -231,7 +224,7 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     if self.built:  # pylint: disable=access-member-before-definition
       return
 
-    input_shape = tensor_shape.TensorShape(input_shape)
+    input_shape = tf.TensorShape(input_shape)
     if input_shape.ndims != 3:
       raise ValueError("Expecting input_shape with 3 dims, got %d" %
                        input_shape.ndims)
@@ -243,18 +236,18 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     self.input_spec = base_layer.InputSpec(ndim=3, axes={-1: self._input_size})
 
     # Create the variables
-    with vs.variable_scope(self._scope, reuse=self.built):  # pylint: disable=access-member-before-definition
+    with tf.variable_scope(self._scope, reuse=self.built):  # pylint: disable=access-member-before-definition
       if self._weights_initializer is None:
-        self._weights_initializer = init_ops.glorot_uniform_initializer(
+        self._weights_initializer = tf.glorot_uniform_initializer(
             self._seed, dtype=self._plain_dtype)
       if self._bias_initializer is None:
-        self._bias_initializer = init_ops.constant_initializer(
+        self._bias_initializer = tf.constant_initializer(
             0.0, dtype=self._plain_dtype)
-      self.kernel = vs.get_variable("kernel",
+      self.kernel = tf.get_variable("kernel",
                                     dtype=self._plain_dtype,
                                     initializer=self._weights_initializer,
                                     shape=self.canonical_weight_shape)
-      self.biases = vs.get_variable("biases",
+      self.biases = tf.get_variable("biases",
                                     dtype=self._plain_dtype,
                                     initializer=self._bias_initializer,
                                     shape=self.canonical_bias_shapes)
@@ -299,16 +292,15 @@ class _PopnnRNN(base_layer.Layer):  #pylint: disable=W0223
     return [self._num_gates_per_layer, self._num_units]
 
   def _extract_final_state(self, outputs, seq_len=None):
-    time_len = array_ops.shape(outputs)[0]
-    batch_size = array_ops.shape(outputs)[1]
+    time_len = tf.shape(outputs)[0]
+    batch_size = tf.shape(outputs)[1]
 
     if seq_len is not None:
-      indices = math_ops.add(
-          seq_len, math_ops.range(0, time_len * batch_size,
-                                  delta=time_len)) - 1
-      state = array_ops.transpose(outputs, perm=(1, 0, 2))
-      state = array_ops.reshape(state, [-1, self._num_units])
-      state = array_ops.gather(state, indices)
+      indices = tf.add(seq_len,
+                       tf.range(0, time_len * batch_size, delta=time_len)) - 1
+      state = tf.transpose(outputs, perm=(1, 0, 2))
+      state = tf.reshape(state, [-1, self._num_units])
+      state = tf.gather(state, indices)
     else:
       state = outputs[-1, :, :]
 
@@ -369,8 +361,8 @@ class PopnnLSTM(_PopnnRNN):
 
   def __init__(self,
                num_units,
-               dtype=dtypes.float32,
-               partials_dtype=dtypes.float32,
+               dtype=tf.float32,
+               partials_dtype=tf.float32,
                seed=None,
                weights_initializer=None,
                bias_initializer=None,
@@ -484,12 +476,12 @@ class PopnnLSTM(_PopnnRNN):
     """
 
     dtype = self.dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
-    if initial_state is not None and not isinstance(initial_state,
-                                                    rnn_cell.LSTMStateTuple):
+    if initial_state is not None and not isinstance(
+        initial_state, tf.nn.rnn_cell.LSTMStateTuple):
       raise ValueError("Invalid initial_state type: `%s`, expecting "
                        "`LSTMStateTuple`." % type(initial_state))
 
@@ -498,8 +490,8 @@ class PopnnLSTM(_PopnnRNN):
       initial_state = self._zero_state(batch_size)
 
     c, h = initial_state
-    h = ops.convert_to_tensor(h, dtype=dtype)
-    c = ops.convert_to_tensor(c, dtype=dtype)
+    h = tf.convert_to_tensor(h, dtype=dtype)
+    c = tf.convert_to_tensor(c, dtype=dtype)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
@@ -537,8 +529,8 @@ class PopnnLSTM(_PopnnRNN):
   def _zero_state(self, batch_size):
     res = []
     for sp in self.state_shape(batch_size):
-      res.append(array_ops.zeros(sp, dtype=self.dtype))
-    return rnn_cell.LSTMStateTuple(*res)
+      res.append(tf.zeros(sp, dtype=self.dtype))
+    return tf.nn.rnn_cell.LSTMStateTuple(*res)
 
   def _make_call_result(self, popnn_result, seq_len=None):
     """Takes the result from the popnn call and converts it to the correct
@@ -547,7 +539,7 @@ class PopnnLSTM(_PopnnRNN):
     outputs, c_state, _ = popnn_result
     if self._return_state:
       h_state = self._extract_final_state(outputs, seq_len)
-      state = rnn_cell.LSTMStateTuple(c_state, h_state)
+      state = tf.nn.rnn_cell.LSTMStateTuple(c_state, h_state)
       return outputs, state
     return outputs
 
@@ -583,12 +575,12 @@ class PopnnDynamicLSTM(PopnnLSTM):
     """
 
     dtype = self.dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
-    if initial_state is not None and not isinstance(initial_state,
-                                                    rnn_cell.LSTMStateTuple):
+    if initial_state is not None and not isinstance(
+        initial_state, tf.nn.rnn_cell.LSTMStateTuple):
       raise ValueError("Invalid initial_state type: `%s`, expecting "
                        "`LSTMStateTuple`." % type(initial_state))
 
@@ -597,8 +589,8 @@ class PopnnDynamicLSTM(PopnnLSTM):
       initial_state = self._zero_state(batch_size)
 
     c, h = initial_state
-    h = ops.convert_to_tensor(h, dtype=dtype)
-    c = ops.convert_to_tensor(c, dtype=dtype)
+    h = tf.convert_to_tensor(h, dtype=dtype)
+    c = tf.convert_to_tensor(c, dtype=dtype)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
@@ -647,8 +639,8 @@ class PopnnGRU(_PopnnRNN):
 
   def __init__(self,
                num_units,
-               dtype=dtypes.float32,
-               partials_dtype=dtypes.float32,
+               dtype=tf.float32,
+               partials_dtype=tf.float32,
                seed=None,
                weights_initializer=None,
                bias_initializer=None,
@@ -767,15 +759,15 @@ class PopnnGRU(_PopnnRNN):
     """
 
     dtype = self.dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
     if initial_state is None:
       # Create a zero state.
       initial_state = self._zero_state(batch_size)
 
-    initial_state = ops.convert_to_tensor(initial_state, dtype=dtype)
+    initial_state = tf.convert_to_tensor(initial_state, dtype=dtype)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
@@ -811,7 +803,7 @@ class PopnnGRU(_PopnnRNN):
     return [batch_size, self.num_units]
 
   def _zero_state(self, batch_size):
-    return array_ops.zeros(self.state_shape(batch_size), dtype=self.dtype)
+    return tf.zeros(self.state_shape(batch_size), dtype=self.dtype)
 
   def _canonical_bias_shape(self, unused_layer):
     """Shapes of Popnn canonical bias tensors for given layer."""
@@ -856,8 +848,8 @@ class PopnnDynamicGRU(PopnnGRU):
 
   def __init__(self,
                num_units,
-               dtype=dtypes.float32,
-               partials_dtype=dtypes.float32,
+               dtype=tf.float32,
+               partials_dtype=tf.float32,
                seed=None,
                weights_initializer=None,
                bias_initializer=None,
@@ -972,20 +964,20 @@ class PopnnDynamicGRU(PopnnGRU):
 
     dtype = self.dtype
 
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
     if not time_major:
-      inputs = array_ops.transpose(inputs, [1, 0, 2])
+      inputs = tf.transpose(inputs, [1, 0, 2])
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
     if initial_state is None:
       # Create a zero state.
       initial_state = self._zero_state(batch_size)
 
-    initial_state = ops.convert_to_tensor(initial_state, dtype=dtype)
+    initial_state = tf.convert_to_tensor(initial_state, dtype=dtype)
     if self._reset_after:
-      self.biases = array_ops.expand_dims(self.biases, 1)
-      self.biases = array_ops.concat([self.biases, self.biases], axis=1)
+      self.biases = tf.expand_dims(self.biases, 1)
+      self.biases = tf.concat([self.biases, self.biases], axis=1)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)
@@ -1029,8 +1021,8 @@ class PopnnAUGRU(PopnnGRU):
 
   def __init__(self,
                num_units,
-               dtype=dtypes.float32,
-               partials_dtype=dtypes.float32,
+               dtype=tf.float32,
+               partials_dtype=tf.float32,
                seed=None,
                weights_initializer=None,
                bias_initializer=None,
@@ -1140,30 +1132,30 @@ class PopnnAUGRU(PopnnGRU):
     """
 
     dtype = self.dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
     if not time_major:
-      inputs = array_ops.transpose(inputs, [1, 0, 2])
-      attention_score = array_ops.transpose(attention_score, [1, 0])
+      inputs = tf.transpose(inputs, [1, 0, 2])
+      attention_score = tf.transpose(attention_score, [1, 0])
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
     if initial_state is None:
       # Create a zero state.
       initial_state = self._zero_state(batch_size)
 
-    initial_state = ops.convert_to_tensor(initial_state, dtype=dtype)
-    augru_biases_r_u = vs.get_variable("bias_r_u",
+    initial_state = tf.convert_to_tensor(initial_state, dtype=dtype)
+    augru_biases_r_u = tf.get_variable("bias_r_u",
                                        dtype=inputs.dtype,
-                                       initializer=init_ops.ones_initializer(),
+                                       initializer=tf.ones_initializer(),
                                        shape=[2, self._num_units])
-    augru_biases_c = vs.get_variable("bias_c",
+    augru_biases_c = tf.get_variable("bias_c",
                                      dtype=inputs.dtype,
-                                     initializer=init_ops.zeros_initializer(),
+                                     initializer=tf.zeros_initializer(),
                                      shape=[1, self._num_units])
-    augru_biases = array_ops.concat([augru_biases_r_u, augru_biases_c], axis=0)
+    augru_biases = tf.concat([augru_biases_r_u, augru_biases_c], axis=0)
     if self._reset_after:
-      augru_biases = array_ops.expand_dims(augru_biases, 1)
-      augru_biases = array_ops.concat([augru_biases, augru_biases], axis=1)
+      augru_biases = tf.expand_dims(augru_biases, 1)
+      augru_biases = tf.concat([augru_biases, augru_biases], axis=1)
 
     options = json.dumps(self._options_with_amp)
     options_bwd = json.dumps(self._options_bwd_with_amp)

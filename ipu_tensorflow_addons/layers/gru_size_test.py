@@ -21,19 +21,13 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import pva
 import numpy as np
+import tensorflow as tf
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
-import pva
-
 from ipu_tensorflow_addons import layers
 
 DATA_TYPE = np.float16
@@ -48,24 +42,24 @@ def _PopnnLSTM(x, h, c):
   lstm_cell = layers.PopnnLSTM(
       NUM_HIDDEN,
       dtype=DATA_TYPE,
-      weights_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE),
-      bias_initializer=init_ops.zeros_initializer(dtype=DATA_TYPE))
-  state = rnn_cell.LSTMStateTuple(c, h)
+      weights_initializer=tf.zeros_initializer(dtype=DATA_TYPE),
+      bias_initializer=tf.zeros_initializer(dtype=DATA_TYPE))
+  state = tf.nn.rnn_cell.LSTMStateTuple(c, h)
   return lstm_cell(x, initial_state=state, training=False)
 
 
 def _tfLSTM(x, h, c):
-  lstm_cell = rnn_cell.LSTMCell(
+  lstm_cell = tf.nn.rnn_cell.LSTMCell(
       NUM_HIDDEN,
       name='basic_lstm_cell',
       forget_bias=0.,
-      initializer=init_ops.zeros_initializer(dtype=DATA_TYPE))
-  state = rnn_cell.LSTMStateTuple(c, h)
-  return rnn.dynamic_rnn(lstm_cell,
-                         x,
-                         dtype=DATA_TYPE,
-                         initial_state=state,
-                         time_major=True)
+      initializer=tf.zeros_initializer(dtype=DATA_TYPE))
+  state = tf.nn.rnn_cell.LSTMStateTuple(c, h)
+  return tf.nn.dynamic_rnn(lstm_cell,
+                           x,
+                           dtype=DATA_TYPE,
+                           initial_state=state,
+                           time_major=True)
 
 
 class LstmSizeTest(test_util.TensorFlowTestCase):
@@ -77,14 +71,14 @@ class LstmSizeTest(test_util.TensorFlowTestCase):
     cfg.configure_ipu_system()
 
     with self.session() as sess:
-      with ops.device('cpu'):
-        px = array_ops.placeholder(DATA_TYPE, shape=x.shape)
-        ph = array_ops.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
-        pc = array_ops.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
+      with tf.device('cpu'):
+        px = tf.placeholder(DATA_TYPE, shape=x.shape)
+        ph = tf.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
+        pc = tf.placeholder(DATA_TYPE, shape=[BATCH_SIZE, NUM_HIDDEN])
       with ipu.scopes.ipu_scope("/device:IPU:0"):
         r = ipu.ipu_compiler.compile(layer_func, inputs=[px, ph, pc])
 
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       report_helper.clear_reports()
       result = sess.run(r, {
           px: x,

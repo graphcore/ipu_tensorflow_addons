@@ -19,16 +19,12 @@
 
 import numpy as np
 from absl.testing import parameterized
-from tensorflow.compat.v1 import disable_v2_behavior
-from tensorflow.python import keras
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import ops
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.python.keras.layers import recurrent_v2
 from tensorflow.python.ipu import config
 from tensorflow.python.ipu import scopes
-from tensorflow.python.keras.layers import recurrent_v2
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
-
 from ipu_tensorflow_addons.layers import rnn_ops
 
 _BATCH_SIZE = 6
@@ -80,7 +76,7 @@ class LstmTest(RnnTest, parameterized.TestCase):
       result = layer(inputs)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def call_dynamic_lstm_ipu(self, inputs, seq_lens, return_state):
@@ -95,7 +91,7 @@ class LstmTest(RnnTest, parameterized.TestCase):
       result = layer(inputs, seq_lens)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def call_lstm_cpu(self, inputs, mask, return_state):
@@ -109,14 +105,14 @@ class LstmTest(RnnTest, parameterized.TestCase):
                               unit_forget_bias=False,
                               stateful=False,
                               time_major=True)
-    with ops.device('cpu'):
+    with tf.device('cpu'):
       kwargs = {}
       if mask is not None:
-        kwargs['mask'] = constant_op.constant(mask)
+        kwargs['mask'] = tf.constant(mask)
       result = layer(inputs, **kwargs)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def test_lstm(self, return_state):
@@ -172,7 +168,7 @@ class GruTest(RnnTest, parameterized.TestCase):
       result = layer(inputs)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def call_dynamic_gru_ipu(self, inputs, seq_lens, return_state):
@@ -187,7 +183,7 @@ class GruTest(RnnTest, parameterized.TestCase):
       result = layer(inputs, seq_lens)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def call_augru_ipu(self, inputs, seq_lens, attention_score, return_state):
@@ -202,7 +198,7 @@ class GruTest(RnnTest, parameterized.TestCase):
       result = layer(inputs, seq_lens, attention_score)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def call_gru_cpu(self, inputs, mask, return_state):
@@ -217,14 +213,14 @@ class GruTest(RnnTest, parameterized.TestCase):
                              time_major=True,
                              reset_after=False)
 
-    with ops.device('cpu'):
+    with tf.device('cpu'):
       kwargs = {}
       if mask is not None:
-        kwargs['mask'] = constant_op.constant(mask)
+        kwargs['mask'] = tf.constant(mask)
       result = layer(inputs, **kwargs)
 
     with self.session() as sess:
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       return as_list(sess.run(result))
 
   def test_gru(self, return_state):
@@ -268,7 +264,7 @@ class GruTest(RnnTest, parameterized.TestCase):
 
 
 if __name__ == '__main__':
-  disable_v2_behavior()
+  tf.compat.v1.disable_v2_behavior()
 
   # Configure IPUs
   cfg = config.IPUConfig()
