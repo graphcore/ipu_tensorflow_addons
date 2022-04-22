@@ -20,21 +20,15 @@ EffectiveTransformer Keras layer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-from tensorflow.python.ipu.keras import layers as ipu_layers
+import tensorflow.compat.v2 as tf
 from tensorflow.python.ipu.ops.slicing_ops import sequence_slice
-from tensorflow.python.keras import activations
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import layers
-from tensorflow.python.keras.engine.base_layer import Layer
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn_ops
+from tensorflow.keras import activations
+from tensorflow.keras import initializers
+from tensorflow.keras import layers
+from ipu_tensorflow_addons.keras import layers as ipu_layers
 
 
-class EffectiveTransformer(Layer):
+class EffectiveTransformer(layers.Layer):
   """EffectiveTransformer is an implementation of a multihead attention
   network.
 
@@ -215,34 +209,33 @@ class EffectiveTransformer(Layer):
     to_dim = input_shapes[2][1]
 
     # Buffer for padded sequences.
-    self._from_sequence_buffer = array_ops.zeros(
-        (self.max_batch_size, from_dim))
+    self._from_sequence_buffer = tf.zeros((self.max_batch_size, from_dim))
 
-    self._to_sequence_buffer = array_ops.zeros((self.max_batch_size, to_dim))
+    self._to_sequence_buffer = tf.zeros((self.max_batch_size, to_dim))
 
     # Buffer for unpadded sequences.
-    self._from_sequence_buffer_unpadded = array_ops.zeros(
+    self._from_sequence_buffer_unpadded = tf.zeros(
         (self.sequences_per_iter, from_dim))
 
-    self._to_sequence_buffer_unpadded = array_ops.zeros(
+    self._to_sequence_buffer_unpadded = tf.zeros(
         (self.sequences_per_iter, to_dim))
 
     # Buffer for sequence lengths.
-    self._sequence_length_buffer = array_ops.zeros((self.max_batch_size, 1),
-                                                   dtype=dtypes.int32)
+    self._sequence_length_buffer = tf.zeros((self.max_batch_size, 1),
+                                            dtype=tf.int32)
 
     # Buffers for padded q, k and v.
-    self._padded_q_buffer = array_ops.zeros(
+    self._padded_q_buffer = tf.zeros(
         (self.max_batch_size * from_dim * self.num_attention_heads *
          self.attention_head_size, 1),
         dtype=self._q_layer.dtype)
 
-    self._padded_k_buffer = array_ops.zeros(
+    self._padded_k_buffer = tf.zeros(
         (self.max_batch_size * to_dim * self.num_attention_heads *
          self.attention_head_size, 1),
         dtype=self._k_layer.dtype)
 
-    self._padded_v_buffer = array_ops.zeros(
+    self._padded_v_buffer = tf.zeros(
         (self.max_batch_size * to_dim * self.num_attention_heads *
          self.attention_head_size, 1),
         dtype=self._v_layer.dtype)
@@ -270,10 +263,10 @@ class EffectiveTransformer(Layer):
       raise ValueError(
           "EffectiveTransformer must take either four or five inputs.")
 
-    from_sequences = ops.convert_to_tensor(inputs[0])
-    to_sequences = ops.convert_to_tensor(inputs[2])
-    from_sequence_lengths = ops.convert_to_tensor(inputs[1])
-    to_sequence_lengths = ops.convert_to_tensor(inputs[3])
+    from_sequences = tf.convert_to_tensor(inputs[0])
+    to_sequences = tf.convert_to_tensor(inputs[2])
+    from_sequence_lengths = tf.convert_to_tensor(inputs[1])
+    to_sequence_lengths = tf.convert_to_tensor(inputs[3])
 
     # Check that the from/to tensors are compatible.
     if len(from_sequences.shape) != len(to_sequences.shape):
@@ -297,8 +290,8 @@ class EffectiveTransformer(Layer):
     mask_shape = (from_sequences.shape[0], self.num_attention_heads)
     q_mask = inputs[4] if len(inputs) == 5 else None
     if q_mask is None:
-      q_mask = array_ops.constant(True, shape=mask_shape, dtype=dtypes.bool)
-    q_mask = ops.convert_to_tensor(q_mask)
+      q_mask = tf.constant(True, shape=mask_shape, dtype=tf.bool)
+    q_mask = tf.convert_to_tensor(q_mask)
 
     if q_mask.shape != mask_shape:
       raise ValueError("q_mask must have shape "
@@ -306,21 +299,19 @@ class EffectiveTransformer(Layer):
 
     # Context layer output.
     # [num_sequences, from_dim, num_heads, head_size]
-    context = array_ops.zeros(
-        (from_sequences.shape[0], from_sequences.shape[1],
-         self.num_attention_heads, self.attention_head_size),
-        dtype=dtypes.float32)
+    context = tf.zeros((from_sequences.shape[0], from_sequences.shape[1],
+                        self.num_attention_heads, self.attention_head_size),
+                       dtype=tf.float32)
 
-    context = control_flow_ops.while_loop(
-        self._main_loop_condition,
-        self._main_loop_body,
-        loop_vars=[
-            context, from_sequences, from_sequence_lengths, to_sequences,
-            to_sequence_lengths, q_mask, 0
-        ],
-        maximum_iterations=self.max_batch_size)[0]
+    context = tf.while_loop(self._main_loop_condition,
+                            self._main_loop_body,
+                            loop_vars=[
+                                context, from_sequences, from_sequence_lengths,
+                                to_sequences, to_sequence_lengths, q_mask, 0
+                            ],
+                            maximum_iterations=self.max_batch_size)[0]
 
-    context_flat = array_ops.reshape(
+    context_flat = tf.reshape(
         context,
         (from_sequences.shape[0],
          from_sequences.shape[1] * self.num_attention_heads * \
@@ -381,12 +372,12 @@ class EffectiveTransformer(Layer):
       to_sequence_lengths,  # pylint: disable=unused-argument
       q_mask,  # pylint: disable=unused-argument
       num_processed):
-    return math_ops.less(num_processed, from_sequences.shape[0])
+    return tf.less(num_processed, from_sequences.shape[0])
 
   def _main_loop_body(self, context, from_sequences, from_sequence_lengths,
                       to_sequences, to_sequence_lengths, q_mask,
                       num_processed):
-    #num_processed = array_ops.stop_gradient(num_processed)
+    #num_processed = tf.stop_gradient(num_processed)
 
     # Get the slicing indices for this iteration.
     min_idx, max_idx = self._get_compressed_sequence_bounds(
@@ -432,7 +423,7 @@ class EffectiveTransformer(Layer):
     if hasattr(self, '_attention_dropout'):
       batch_context = self._attention_dropout(batch_context)[0]
 
-    batch_context = array_ops.transpose(batch_context, [0, 2, 1, 3])
+    batch_context = tf.transpose(batch_context, [0, 2, 1, 3])
     context = sequence_slice(context, batch_context, [num_processed_iter], [0],
                              [num_processed], False)
 
@@ -445,29 +436,29 @@ class EffectiveTransformer(Layer):
 
     if d == self._from_sequence_buffer.shape[1] and padded:
       if self._from_sequence_buffer.dtype != sequences.dtype:
-        with ops.init_scope():
-          self._from_sequence_buffer = array_ops.zeros_like(
+        with tf.init_scope():
+          self._from_sequence_buffer = tf.zeros_like(
               self._from_sequence_buffer, dtype=sequences.dtype)
       return self._from_sequence_buffer
 
     if d == self._to_sequence_buffer.shape[1] and padded:
       if self._to_sequence_buffer.dtype != sequences.dtype:
-        with ops.init_scope():
-          self._to_sequence_buffer = array_ops.zeros_like(
-              self._to_sequence_buffer, dtype=sequences.dtype)
+        with tf.init_scope():
+          self._to_sequence_buffer = tf.zeros_like(self._to_sequence_buffer,
+                                                   dtype=sequences.dtype)
       return self._to_sequence_buffer
 
     if d == self._from_sequence_buffer_unpadded.shape[1] and not padded:
       if self._from_sequence_buffer_unpadded.dtype != sequences.dtype:
-        with ops.init_scope():
-          self._from_sequence_buffer_unpadded = array_ops.zeros_like(
+        with tf.init_scope():
+          self._from_sequence_buffer_unpadded = tf.zeros_like(
               self._from_sequence_buffer_unpadded, dtype=sequences.dtype)
       return self._from_sequence_buffer_unpadded
 
     if d == self._to_sequence_buffer_unpadded.shape[1] and not padded:
       if self._to_sequence_buffer_unpadded.dtype != sequences.dtype:
-        with ops.init_scope():
-          self._to_sequence_buffer_unpadded = array_ops.zeros_like(
+        with tf.init_scope():
+          self._to_sequence_buffer_unpadded = tf.zeros_like(
               self._to_sequence_buffer_unpadded, dtype=sequences.dtype)
       return self._to_sequence_buffer_unpadded
 
@@ -493,24 +484,24 @@ class EffectiveTransformer(Layer):
     from_max = self.sequences_per_iter * from_dim[1]
     to_max = self.sequences_per_iter * to_dim[1]
 
-    from_len = array_ops.squeeze(from_seq_lengths)
-    to_len = array_ops.squeeze(to_seq_lengths)
+    from_len = tf.squeeze(from_seq_lengths)
+    to_len = tf.squeeze(to_seq_lengths)
 
     def _loop_condition(end_idx, num_used_from, num_used_to):
       def _check_bounds():
         # Will the next step take us over either limit?
         will_not_exceed_from = \
-          math_ops.less(num_used_from + from_len[end_idx], from_max)
+          tf.less(num_used_from + from_len[end_idx], from_max)
 
         will_not_exceed_to = \
-          math_ops.less(num_used_to + to_len[end_idx], to_max)
+          tf.less(num_used_to + to_len[end_idx], to_max)
 
-        a = math_ops.logical_and(will_not_exceed_from, will_not_exceed_to)
-        b = math_ops.less(end_idx - idx, self.max_batch_size)
-        return math_ops.logical_and(a, b)
+        a = tf.logical_and(will_not_exceed_from, will_not_exceed_to)
+        b = tf.less(end_idx - idx, self.max_batch_size)
+        return tf.logical_and(a, b)
 
-      return control_flow_ops.cond(math_ops.less(end_idx, from_len.shape[0]),
-                                   lambda: _check_bounds(), lambda: False)  # pylint: disable=unnecessary-lambda
+      return tf.cond(tf.less(end_idx, from_len.shape[0]),
+                     lambda: _check_bounds(), lambda: False)  # pylint: disable=unnecessary-lambda
 
     def _loop_body(end_idx, num_used_from, num_used_to):
       num_used_from += from_len[end_idx]
@@ -519,10 +510,10 @@ class EffectiveTransformer(Layer):
 
       return end_idx, num_used_from, num_used_to
 
-    res = control_flow_ops.while_loop(_loop_condition,
-                                      _loop_body,
-                                      loop_vars=[idx, 0, 0],
-                                      maximum_iterations=self.max_batch_size)
+    res = tf.while_loop(_loop_condition,
+                        _loop_body,
+                        loop_vars=[idx, 0, 0],
+                        maximum_iterations=self.max_batch_size)
 
     return idx, res[0] - 1
 
@@ -537,7 +528,7 @@ class EffectiveTransformer(Layer):
     # Remove the padding.
     seq = sequence_slice(self._sequence_length_buffer, sequence_lengths,
                          [num_seq], [start_idx], [0], True)
-    unpadded = self._unpad(buffer, array_ops.squeeze(seq), self.max_batch_size)
+    unpadded = self._unpad(buffer, tf.squeeze(seq), self.max_batch_size)
 
     # Slice into output tensor.
     unpadded_buffer = self._get_sequence_buffer(sequences, padded=False)
@@ -549,17 +540,16 @@ class EffectiveTransformer(Layer):
     # be cast to another int or float type.
     # SequenceSlice only supports [float16, float32 and int32].
     dtype = sequences.dtype
-    if dtype == dtypes.bool:
-      dtype = dtypes.float16
+    if dtype == tf.bool:
+      dtype = tf.float16
 
     n = max_idx - min_idx
-    seq_batch = array_ops.zeros((buffer_size, *sequences.shape[1:]),
-                                dtype=dtype)
-    seq_batch = sequence_slice(seq_batch, math_ops.cast(sequences, dtype), [n],
+    seq_batch = tf.zeros((buffer_size, *sequences.shape[1:]), dtype=dtype)
+    seq_batch = sequence_slice(seq_batch, tf.cast(sequences, dtype), [n],
                                [min_idx], [0], False)
 
     if seq_batch.dtype != sequences.dtype:
-      seq_batch = math_ops.cast(seq_batch, sequences.dtype)
+      seq_batch = tf.cast(seq_batch, sequences.dtype)
 
     return seq_batch
 
@@ -580,8 +570,8 @@ class EffectiveTransformer(Layer):
     n = sequences.shape[1]
     qkv_shape = (m, n, self.num_attention_heads, self.attention_head_size)
 
-    seq = array_ops.reshape(sequences, (m * n, 1))
-    return array_ops.reshape(embedding_layer(seq), qkv_shape)
+    seq = tf.reshape(sequences, (m * n, 1))
+    return tf.reshape(embedding_layer(seq), qkv_shape)
 
   def _calculate_attention_probabilities(self, q, k, scale):
     """
@@ -600,9 +590,9 @@ class EffectiveTransformer(Layer):
 
     scale is a 1x1
     """
-    qt = array_ops.transpose(q, [0, 2, 1, 3])
-    kt = array_ops.transpose(k, [0, 2, 1, 3])
-    return math_ops.matmul(qt, kt, transpose_b=True) * scale
+    qt = tf.transpose(q, [0, 2, 1, 3])
+    kt = tf.transpose(k, [0, 2, 1, 3])
+    return tf.matmul(qt, kt, transpose_b=True) * scale
 
   def _apply_attention_probabilities(self, batch_attention_probabilities,
                                      value):
@@ -622,9 +612,9 @@ class EffectiveTransformer(Layer):
     Normalises batch_attention_probabilities into an actual distribution.
     """
 
-    attention_distribution = nn_ops.softmax(batch_attention_probabilities)
-    value_t = array_ops.transpose(value, [0, 2, 1, 3])
-    return math_ops.matmul(attention_distribution, value_t)
+    attention_distribution = tf.nn.softmax(batch_attention_probabilities)
+    value_t = tf.transpose(value, [0, 2, 1, 3])
+    return tf.matmul(attention_distribution, value_t)
 
   def _apply_q_mask(self, attention_probabilities, q_mask, min_idx, max_idx):
     """
@@ -641,10 +631,9 @@ class EffectiveTransformer(Layer):
     """
     q_mask_sliced = self._slice_out_sequences(q_mask, min_idx, max_idx,
                                               self.max_batch_size)
-    q_mask_sliced = math_ops.cast(q_mask_sliced,
-                                  dtype=attention_probabilities.dtype)
-    q_mask_sliced = array_ops.expand_dims(q_mask_sliced, 2)
-    q_mask_sliced = array_ops.expand_dims(q_mask_sliced, 3)
+    q_mask_sliced = tf.cast(q_mask_sliced, dtype=attention_probabilities.dtype)
+    q_mask_sliced = tf.expand_dims(q_mask_sliced, 2)
+    q_mask_sliced = tf.expand_dims(q_mask_sliced, 3)
     return attention_probabilities * q_mask_sliced
 
   def _unpad(self, sequences, sequence_lengths, slices_per_iter):
@@ -676,9 +665,9 @@ class EffectiveTransformer(Layer):
       # the sequence matrix.
       # We do this as we wish to slice a subset of it's elements and
       # sequence_slice slices along the major dimension.
-      row = array_ops.zeros((1, seq.shape[1]), dtype=seq.dtype)
+      row = tf.zeros((1, seq.shape[1]), dtype=seq.dtype)
       row = sequence_slice(row, seq, [1], [idx], [0], False)
-      return array_ops.transpose(row)
+      return tf.transpose(row)
 
     def _insert_full(seq_out, seq, seq_len, num_written, out_row_idx,
                      slice_no):
@@ -695,16 +684,16 @@ class EffectiveTransformer(Layer):
                                False)
 
       # Replace the whole row with the updated dst in seq_out.
-      seq_out = _slice_back(seq_out, array_ops.transpose(dst_row), out_row_idx)
+      seq_out = _slice_back(seq_out, tf.transpose(dst_row), out_row_idx)
 
       # Update the element counter.
       num_written += n
 
       # If we have filled a row, increment the output index and reset
       # the element counter.
-      out_row_idx, num_written = control_flow_ops.cond(
-          math_ops.equal(num_written, seq.shape[1]), lambda:
-          (out_row_idx + 1, 0), lambda: (out_row_idx, num_written))
+      out_row_idx, num_written = tf.cond(tf.equal(num_written, seq.shape[1]),
+                                         lambda: (out_row_idx + 1, 0), lambda:
+                                         (out_row_idx, num_written))
 
       return seq_out, seq, seq_len, num_written, out_row_idx, slice_no
 
@@ -715,9 +704,9 @@ class EffectiveTransformer(Layer):
 
       # If the current row is full, increment the output index and reset
       # the element counter.
-      out_row_idx, num_written = control_flow_ops.cond(
-          math_ops.equal(num_written, seq.shape[1]), lambda:
-          (out_row_idx + 1, 0), lambda: (out_row_idx, num_written))
+      out_row_idx, num_written = tf.cond(tf.equal(num_written, seq.shape[1]),
+                                         lambda: (out_row_idx + 1, 0), lambda:
+                                         (out_row_idx, num_written))
 
       # How many elements of the sequence can we fit on the current row.
       num_partial = seq.shape[1] - num_written
@@ -732,7 +721,7 @@ class EffectiveTransformer(Layer):
                                [num_written], False)
 
       # Replace the whole row with the updated dst in seq_out.
-      seq_out = _slice_back(seq_out, array_ops.transpose(dst_row), out_row_idx)
+      seq_out = _slice_back(seq_out, tf.transpose(dst_row), out_row_idx)
 
       # Update the row's capacity, it'll now be zero, so insert the
       # remainder of the sequence on the next row.
@@ -748,7 +737,7 @@ class EffectiveTransformer(Layer):
       dst_row = _get_row_as_col(seq_out, out_row_idx)
       dst_row = sequence_slice(dst_row, src_row, [num_partial_remaining],
                                [num_partial], [0], False)
-      seq_out = _slice_back(seq_out, array_ops.transpose(dst_row), out_row_idx)
+      seq_out = _slice_back(seq_out, tf.transpose(dst_row), out_row_idx)
 
       num_written += num_partial_remaining
 
@@ -757,8 +746,8 @@ class EffectiveTransformer(Layer):
     def _do_slice(seq_out, seq, seq_len, num_written, out_row_idx, slice_no):
       # If the current sequence can be fit into the current row, then enter
       # _insert_full, else _insert_partial.
-      return control_flow_ops.cond(
-          math_ops.less_equal(seq_len[slice_no], seq.shape[1] - num_written),
+      return tf.cond(
+          tf.less_equal(seq_len[slice_no], seq.shape[1] - num_written),
           lambda: _insert_full(seq_out, seq, seq_len, num_written, out_row_idx,
                                slice_no),
           lambda: _insert_partial(seq_out, seq, seq_len, num_written,
@@ -766,26 +755,26 @@ class EffectiveTransformer(Layer):
 
     def _loop_body(seq_out, seq, seq_len, num_written, out_row_idx, slice_no):
       seq_out, seq, seq_len, num_written, out_row_idx, slice_no = \
-      control_flow_ops.cond(
-          math_ops.greater(seq_len[slice_no], 0),
+      tf.cond(
+          tf.greater(seq_len[slice_no], 0),
           lambda: _do_slice(seq_out, seq, seq_len, num_written,
                             out_row_idx, slice_no),
           lambda: (seq_out, seq, seq_len, num_written, out_row_idx, slice_no))
 
       return seq_out, seq, seq_len, num_written, out_row_idx, slice_no + 1
 
-    out_seq = array_ops.zeros_like(sequences)
+    out_seq = tf.zeros_like(sequences)
 
-    num_written = array_ops.zeros((), dtype=dtypes.int32)
-    out_row_idx = array_ops.zeros((), dtype=dtypes.int32)
-    slice_no = array_ops.zeros((), dtype=dtypes.int32)
-    res = control_flow_ops.while_loop(lambda *_: True,
-                                      _loop_body,
-                                      loop_vars=[
-                                          out_seq, sequences, sequence_lengths,
-                                          num_written, out_row_idx, slice_no
-                                      ],
-                                      maximum_iterations=slices_per_iter)
+    num_written = tf.zeros((), dtype=tf.int32)
+    out_row_idx = tf.zeros((), dtype=tf.int32)
+    slice_no = tf.zeros((), dtype=tf.int32)
+    res = tf.while_loop(lambda *_: True,
+                        _loop_body,
+                        loop_vars=[
+                            out_seq, sequences, sequence_lengths, num_written,
+                            out_row_idx, slice_no
+                        ],
+                        maximum_iterations=slices_per_iter)
 
     return res[0]
 
@@ -804,20 +793,19 @@ class EffectiveTransformer(Layer):
     shape = embedding.shape
 
     flat_len = shape[1] * shape[2] * shape[3]
-    src = array_ops.reshape(embedding, (shape[0], flat_len))
+    src = tf.reshape(embedding, (shape[0], flat_len))
 
     lengths = self._sequence_length_buffer
     lengths = sequence_slice(lengths, sequence_lengths, [n], [min_idx], [0],
                              True)
     lengths *= shape[2] * shape[3]
-    lengths_squeezed = array_ops.squeeze(lengths)
+    lengths_squeezed = tf.squeeze(lengths)
 
-    src_offsets = math_ops.cumsum(lengths_squeezed, exclusive=True)
-    dst_offsets = math_ops.range(self.max_batch_size) * flat_len
+    src_offsets = tf.cumsum(lengths_squeezed, exclusive=True)
+    dst_offsets = tf.range(self.max_batch_size) * flat_len
 
-    src = array_ops.reshape(src, (self.sequences_per_iter * flat_len, 1))
+    src = tf.reshape(src, (self.sequences_per_iter * flat_len, 1))
     dst = sequence_slice(dst, src, lengths_squeezed, src_offsets, dst_offsets,
                          True)
 
-    return array_ops.reshape(
-        dst, (self.max_batch_size, shape[1], shape[2], shape[3]))
+    return tf.reshape(dst, (self.max_batch_size, shape[1], shape[2], shape[3]))

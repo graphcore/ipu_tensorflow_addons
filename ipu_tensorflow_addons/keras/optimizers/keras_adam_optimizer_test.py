@@ -18,15 +18,10 @@
 
 import tempfile
 import numpy as np
+import tensorflow.compat.v2 as tf
 from absl.testing import parameterized
-from tensorflow.keras.optimizers.schedules import InverseTimeDecay
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import dtypes
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import variables
+from tensorflow import keras
 from tensorflow.python.platform import googletest
-
 from ipu_tensorflow_addons.keras.optimizers import AdamIpuOptimizer
 from ipu_tensorflow_addons.keras.optimizers.test_util import OptimizerTest
 
@@ -118,11 +113,11 @@ def adam_update_numpy_amsgrad(
 
 # pylint: disable=protected-access
 def get_beta_accumulators(opt):
-  local_step = math_ops.cast(opt.iterations + 1, opt.opt_dtypes[0])
-  beta_1_t = array_ops.identity(opt._get_hyper('beta_1', opt.opt_dtypes[0]))
-  beta_2_t = array_ops.identity(opt._get_hyper('beta_2', opt.opt_dtypes[0]))
-  beta_1_power = math_ops.pow(beta_1_t, local_step)
-  beta_2_power = math_ops.pow(beta_2_t, local_step)
+  local_step = tf.cast(opt.iterations + 1, opt.opt_dtypes[0])
+  beta_1_t = tf.identity(opt._get_hyper('beta_1', opt.opt_dtypes[0]))
+  beta_2_t = tf.identity(opt._get_hyper('beta_2', opt.opt_dtypes[0]))
+  beta_1_power = tf.pow(beta_1_t, local_step)
+  beta_2_power = tf.pow(beta_2_t, local_step)
   return beta_1_power, beta_2_power
 
 
@@ -133,7 +128,7 @@ class AdamOptimizerTest(OptimizerTest):
       beta_2=[0.999],
       epsilon=[1e-7],
       debiasing=[True, False],
-      dtype=[dtypes.float32],
+      dtype=[tf.float32],
   )
   def testFunctionality(
       self,
@@ -150,10 +145,10 @@ class AdamOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     opt = AdamIpuOptimizer(
         learning_rate=learning_rate,
@@ -166,7 +161,7 @@ class AdamOptimizerTest(OptimizerTest):
         v_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       beta_1_power, beta_2_power = get_beta_accumulators(opt)
@@ -205,7 +200,7 @@ class AdamOptimizerTest(OptimizerTest):
       beta_2=[0.999],
       epsilon=[1e-7],
       debiasing=[True, False],
-      dtype=[dtypes.float32],
+      dtype=[tf.float32],
   )
   def testFunctionalityAmsGrad(
       self,
@@ -223,10 +218,10 @@ class AdamOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     opt = AdamIpuOptimizer(
         learning_rate=learning_rate,
@@ -241,7 +236,7 @@ class AdamOptimizerTest(OptimizerTest):
         amsgrad=True,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       beta_1_power, beta_2_power = get_beta_accumulators(opt)
@@ -282,7 +277,7 @@ class AdamOptimizerTest(OptimizerTest):
       beta_2=[0.999],
       epsilon=[1e-7],
       debiasing=[True, False],
-      dtype=[dtypes.float32],
+      dtype=[tf.float32],
   )
   def testFunctionalityLrSchedule(
       self,
@@ -299,15 +294,15 @@ class AdamOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     decay = 0.5
-    lr_schedule = InverseTimeDecay(learning_rate,
-                                   decay_steps=1.0,
-                                   decay_rate=decay)
+    lr_schedule = keras.optimizers.schedules.InverseTimeDecay(learning_rate,
+                                                              decay_steps=1.0,
+                                                              decay_rate=decay)
 
     opt = AdamIpuOptimizer(
         learning_rate=lr_schedule,
@@ -320,7 +315,7 @@ class AdamOptimizerTest(OptimizerTest):
         v_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       beta_1_power, beta_2_power = get_beta_accumulators(opt)
@@ -355,9 +350,9 @@ class AdamOptimizerTest(OptimizerTest):
 
   @parameterized.product(
       mixed_prec_policy=["mixed_float16", "float16", "float32"],
-      m_dtype=[dtypes.float16, dtypes.float32, None],
-      v_dtype=[dtypes.float16, dtypes.float32, None],
-      optimizer_compute_precisions=[(dtypes.float16,), (dtypes.float32,)],
+      m_dtype=[tf.float16, tf.float32, None],
+      v_dtype=[tf.float16, tf.float32, None],
+      optimizer_compute_precisions=[(tf.float16,), (tf.float32,)],
       debiasing=[True, False],
   )
   def testKerasMixedPrecisionSupported(self, mixed_prec_policy, m_dtype,

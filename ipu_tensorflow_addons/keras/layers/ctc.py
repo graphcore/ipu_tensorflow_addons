@@ -20,11 +20,9 @@ CTC Keras layers
 ~~~~~~~~~~~~~~~~
 """
 
-from tensorflow.python.keras import layers
+import tensorflow.compat.v2 as tf
+from tensorflow.keras import layers
 from tensorflow.python.ipu.ops import nn_ops
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.framework import dtypes
 
 
 class CTCInferenceLayer(layers.Layer):
@@ -130,19 +128,19 @@ class CTCPredictionsLayer(layers.Layer):
     # The "probs" tensor actually stores the negative log probability of
     # each path. Hence want smallest per batch to find the
     # most probable
-    predicted_shape = array_ops.shape(predicted)
+    predicted_shape = tf.shape(predicted)
     batch_size = predicted_shape[0]
     max_time = predicted_shape[2]
     if top_paths == 1:
       if lengths is None:
-        return array_ops.reshape(predicted, [batch_size, max_time])
-      return array_ops.reshape(predicted, [batch_size, max_time]), lengths
+        return tf.reshape(predicted, [batch_size, max_time])
+      return tf.reshape(predicted, [batch_size, max_time]), lengths
 
-    indices = math_ops.argmin(probs, axis=1, output_type=dtypes.int32)
-    indices = array_ops.reshape(indices, [batch_size, 1])
-    batch_range = array_ops.reshape(
-        math_ops.range(batch_size, dtype=dtypes.int32), [batch_size, 1])
-    indices = array_ops.concat([batch_range, indices], 1)
+    indices = tf.argmin(probs, axis=1, output_type=tf.int32)
+    indices = tf.reshape(indices, [batch_size, 1])
+    batch_range = tf.reshape(tf.range(batch_size, dtype=tf.int32),
+                             [batch_size, 1])
+    indices = tf.concat([batch_range, indices], 1)
 
     # Feel like there must be a better way to slice the batch without having
     # to create a constant tensor whose values are just the batch dimension
@@ -152,9 +150,8 @@ class CTCPredictionsLayer(layers.Layer):
     # of reduce max/conditional copy, have more copies but not dynamic so
     # might be more efficient
     if lengths is None:
-      return array_ops.gather_nd(predicted, indices)
-    return array_ops.gather_nd(predicted,
-                               indices), array_ops.gather_nd(lengths, indices)
+      return tf.gather_nd(predicted, indices)
+    return tf.gather_nd(predicted, indices), tf.gather_nd(lengths, indices)
 
   @staticmethod
   def _mask_out_junk_values(blank_index, best_predictions, lengths):
@@ -163,19 +160,19 @@ class CTCPredictionsLayer(layers.Layer):
     predicted_shape = best_predictions.get_shape().as_list()
     batch_size, max_time = predicted_shape[0], predicted_shape[1]
 
-    mask = math_ops.range(max_time, dtype=lengths.dtype)
-    mask = array_ops.broadcast_to(mask, [batch_size, max_time])
+    mask = tf.range(max_time, dtype=lengths.dtype)
+    mask = tf.broadcast_to(mask, [batch_size, max_time])
 
-    lengths = array_ops.reshape(lengths, [batch_size, 1])
-    lengths = array_ops.broadcast_to(lengths, [batch_size, max_time])
+    lengths = tf.reshape(lengths, [batch_size, 1])
+    lengths = tf.broadcast_to(lengths, [batch_size, max_time])
 
-    mask = math_ops.less(mask, lengths)
+    mask = tf.less(mask, lengths)
 
-    blank_tensor = array_ops.constant(blank_index,
-                                      shape=[batch_size, max_time],
-                                      dtype=best_predictions.dtype)
+    blank_tensor = tf.constant(blank_index,
+                               shape=[batch_size, max_time],
+                               dtype=best_predictions.dtype)
 
-    return array_ops.where(mask, best_predictions, blank_tensor)
+    return tf.where(mask, best_predictions, blank_tensor)
 
   def _perform_inference(self, data, data_length, **kwargs):
     probs, lengths, predicted = self._inference_layer.call(
@@ -228,13 +225,13 @@ class CTCLoss(layers.Layer):
     dense_layer = tf.keras.layers.Dense(num_classes)
     transpose_layer = tf.keras.layers.Lambda(
         lambda x: keras.backend.permute_dimensions(x, (1, 0, 2)))
-    ctc_loss_layer = ipu.keras.losses.CTCLoss(from_logits=True)
+    loss = ipu_tensorflow_addons.keras.layers.CTCLoss(from_logits=True)
 
     x = dense_layer(data)
     x = transpose_layer(x)
-    loss = ctc_loss_layer(labels, x, label_length, logit_length)
+    loss = loss(labels, x, label_length, logit_length)
 
-    model = ipu.keras.Model((labels, data, label_length, logit_length), loss)
+    model = tf.keras.Model((labels, data, label_length, logit_length), loss)
     get_loss_output = lambda y_true, y_pred: y_pred
     model.compile('sgd', loss=get_loss_output)
 
@@ -268,8 +265,8 @@ class CTCLoss(layers.Layer):
 
     loss = loss_function(labels, data, label_length, data_length,
                          self.blank_index)
-    loss = math_ops.reduce_mean(loss)
-    loss = array_ops.reshape(loss, [1])
+    loss = tf.reduce_mean(loss)
+    loss = tf.reshape(loss, [1])
     return loss
 
   def get_config(self):

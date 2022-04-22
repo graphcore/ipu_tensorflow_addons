@@ -19,20 +19,14 @@
 
 import numpy as np
 from absl.testing import parameterized
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.python import ipu
 from tensorflow.python.ipu.config import IPUConfig
-from tensorflow.python import keras
-from tensorflow.python.data import Dataset
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import layers
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import ctc_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn_ops
+from tensorflow.keras import layers
 from tensorflow.python.platform import test
-from tensorflow import sparse
 from tensorflow.nn import ctc_beam_search_decoder as cpu_ctc_beam_search_decoder
-
 from ipu_tensorflow_addons.keras.layers import CTCInferenceLayer
 from ipu_tensorflow_addons.keras.layers import CTCLoss
 from ipu_tensorflow_addons.keras.layers import CTCPredictionsLayer
@@ -51,14 +45,13 @@ class CTCPredictionsCpu(layers.Layer):
   @staticmethod
   def mask_out_junk_values(predictions, blank_index, max_time):
     predictions = [
-        sparse.to_dense(t, default_value=blank_index) for t in predictions
+        tf.sparse.to_dense(t, default_value=blank_index) for t in predictions
     ]
     for i, t in enumerate(predictions):
-      paddings = [[0, 0], [0, max_time - array_ops.shape(t)[1]]]
-      t = array_ops.pad(t, paddings, constant_values=blank_index)
-      predictions[i] = array_ops.reshape(t,
-                                         [array_ops.shape(t)[0], 1, max_time])
-    return array_ops.concat(predictions, 1)
+      paddings = [[0, 0], [0, max_time - tf.shape(t)[1]]]
+      t = tf.pad(t, paddings, constant_values=blank_index)
+      predictions[i] = tf.reshape(t, [tf.shape(t)[0], 1, max_time])
+    return tf.concat(predictions, 1)
 
   def call(self, data, data_length, **kwargs):  # pylint: disable=unused-argument,W0221
 
@@ -68,7 +61,7 @@ class CTCPredictionsCpu(layers.Layer):
         beam_width=self.beam_width,
         top_paths=self.top_paths)
     predictions = self.mask_out_junk_values(predictions, self.blank_index,
-                                            array_ops.shape(data)[0])
+                                            tf.shape(data)[0])
 
     predictions = CTCPredictionsLayer._select_most_likely_path(  # pylint: disable=protected-access
         probs, predictions, self.top_paths, None)
@@ -86,12 +79,12 @@ class CTCLossEndpointCpu(layers.Layer):
            labels=None,
            label_length=None,
            **kwargs):  # pylint: disable=unused-argument,W0221
-    loss = ctc_ops.ctc_loss_v2(labels,
-                               logits,
-                               label_length,
-                               logit_length,
-                               blank_index=self.blank_index)
-    loss = math_ops.reduce_mean(loss)
+    loss = tf.nn.ctc_loss(labels,
+                          logits,
+                          label_length,
+                          logit_length,
+                          blank_index=self.blank_index)
+    loss = tf.reduce_mean(loss)
     self.add_loss(loss)
     return logits
 
@@ -165,7 +158,7 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
     x = transpose_layer(x)
 
     if log_softmax:
-      log_softmax_fn = lambda x: nn_ops.log_softmax_v2(x, axis=2)
+      log_softmax_fn = lambda x: tf.nn.log_softmax(x, axis=2)
       log_softmax_layer = layers.Lambda(log_softmax_fn)
       x = log_softmax_layer(x)
 
@@ -209,7 +202,7 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
     x = transpose_layer(x)
 
     if log_softmax:
-      log_softmax_fn = lambda x: nn_ops.log_softmax_v2(x, axis=2)
+      log_softmax_fn = lambda x: tf.nn.log_softmax(x, axis=2)
       log_softmax_layer = layers.Lambda(log_softmax_fn)
       x = log_softmax_layer(x)
 
@@ -260,7 +253,7 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
     x = transpose_layer(x)
 
     if log_softmax:
-      log_softmax_fn = lambda x: nn_ops.log_softmax_v2(x, axis=2)
+      log_softmax_fn = lambda x: tf.nn.log_softmax_v2(x, axis=2)
       log_softmax_layer = layers.Lambda(log_softmax_fn)
       x = log_softmax_layer(x)
 
@@ -299,8 +292,8 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
     output_shapes = (((max_label_length), (max_time, num_classes), (), ()),
                      (max_label_length))
 
-    dataset = Dataset.from_generator(data_generator, output_types,
-                                     output_shapes)
+    dataset = tf.data.Dataset.from_generator(data_generator, output_types,
+                                             output_shapes)
     dataset = dataset.take(batch_size).cache()
     dataset = dataset.batch(batch_size, drop_remainder=True)
     return dataset
@@ -322,7 +315,7 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
       cfg.configure_ipu_system()
 
       # IPU model
-      loss_layer_ipu = ipu.keras.CTCLoss(blank_index=ctc_params["blank_index"])
+      loss_layer_ipu = CTCLoss(blank_index=ctc_params["blank_index"])
       model_ipu = self.create_loss_model(loss_layer_ipu,
                                          ctc_params,
                                          log_softmax=True)
@@ -348,8 +341,8 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
       cfg.configure_ipu_system()
 
       # IPU model
-      loss_layer_ipu = ipu.keras.CTCLoss(blank_index=ctc_params["blank_index"],
-                                         from_logits=True)
+      loss_layer_ipu = CTCLoss(blank_index=ctc_params["blank_index"],
+                               from_logits=True)
       model_ipu = self.create_loss_model(loss_layer_ipu, ctc_params)
       loss_ipu = model_ipu.evaluate(dataset, steps=1)
 
@@ -374,7 +367,7 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
       cfg.configure_ipu_system()
 
       # IPU model
-      loss_layer_ipu = ipu.keras.CTCLoss(blank_index=ctc_params["blank_index"])
+      loss_layer_ipu = CTCLoss(blank_index=ctc_params["blank_index"])
       model_ipu = self.create_loss_model(loss_layer_ipu,
                                          ctc_params,
                                          log_softmax=True)
@@ -403,8 +396,8 @@ class CTCLossTest(test.TestCase, parameterized.TestCase):
       cfg.configure_ipu_system()
 
       # IPU model
-      loss_layer_ipu = ipu.keras.CTCLoss(blank_index=ctc_params["blank_index"],
-                                         from_logits=True)
+      loss_layer_ipu = CTCLoss(blank_index=ctc_params["blank_index"],
+                               from_logits=True)
       model_ipu = self.create_loss_model(loss_layer_ipu, ctc_params)
       history_ipu = model_ipu.fit(dataset, steps_per_epoch=1)
       loss_ipu = history_ipu.history["loss"]

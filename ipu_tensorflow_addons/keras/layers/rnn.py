@@ -22,21 +22,14 @@ Recurrent Keras layers
 
 import json
 import logging
+import collections
 
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.compiler.plugin.poplar.ops import gen_popnn_ops
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
 from tensorflow.python.ipu.ops import op_util
 from tensorflow.python.ipu.ops import rand_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import initializers
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import state_ops
 from tensorflow.python.util import deprecation
-
 from ipu_tensorflow_addons.keras.layers import ipu_layer
 
 POPNN_LSTM = "lstm"
@@ -55,6 +48,8 @@ ACCEPTED_ACTIVATIONS_STR = ",".join(
 ACCEPTED_RECURRENT_ACTIVATIONS_STR = ",".join(
     map(lambda s: f'"{s}"', ACCEPTED_RECURRENT_ACTIVATIONS))
 
+_LSTMStateTuple = collections.namedtuple("LSTMStateTuple", ("c", "h"))
+
 
 class _PopnnRNN(ipu_layer.IPULayer):
   """Base class for implementing XLA and Popnn compatible RNN layers.
@@ -72,7 +67,7 @@ class _PopnnRNN(ipu_layer.IPULayer):
                num_units,
                activation='tanh',
                recurrent_activation='sigmoid',
-               partials_dtype=dtypes.float32,
+               partials_dtype=tf.float32,
                seed=None,
                dropout_seed=None,
                kernel_initializer=None,
@@ -104,8 +99,8 @@ class _PopnnRNN(ipu_layer.IPULayer):
                        "recurrent activation. Acceptable value are " +
                        ACCEPTED_RECURRENT_ACTIVATIONS_STR)
 
-    self._plain_dtype = dtypes.as_dtype(self.dtype or K.floatx())
-    if self._plain_dtype not in [dtypes.float16, dtypes.float32]:
+    self._plain_dtype = tf.as_dtype(self.dtype or keras.backend.floatx())
+    if self._plain_dtype not in [tf.float16, tf.float32]:
       raise ValueError("Only support float16, float32, provided %s" %
                        self._plain_dtype)
     # Layer self.dtype is type name, the original DType object is kept here.
@@ -150,20 +145,20 @@ class _PopnnRNN(ipu_layer.IPULayer):
 
     # Create the initializers.
     if kernel_initializer is None:
-      self._kernel_initializer = init_ops.glorot_uniform_initializer(
-          self._seed)
+      self._kernel_initializer = tf.glorot_uniform_initializer(self._seed)
     else:
-      self._kernel_initializer = initializers.get(kernel_initializer)
+      self._kernel_initializer = keras.initializers.get(kernel_initializer)
 
     if recurrent_initializer is None:
-      self._recurrent_initializer = init_ops.orthogonal_initializer(self._seed)
+      self._recurrent_initializer = tf.orthogonal_initializer(self._seed)
     else:
-      self._recurrent_initializer = initializers.get(recurrent_initializer)
+      self._recurrent_initializer = keras.initializers.get(
+          recurrent_initializer)
 
     if bias_initializer is None:
-      self._bias_initializer = init_ops.zeros_initializer()
+      self._bias_initializer = tf.zeros_initializer()
     else:
-      self._bias_initializer = initializers.get(bias_initializer)
+      self._bias_initializer = keras.initializers.get(bias_initializer)
 
     # Initialize input_size to None, which will be set after build().
     self._input_size = None
@@ -218,7 +213,7 @@ class _PopnnRNN(ipu_layer.IPULayer):
     if self.built:  # pylint: disable=access-member-before-definition
       return
 
-    input_shape = tensor_shape.TensorShape(input_shape)
+    input_shape = tf.TensorShape(input_shape)
     if input_shape.ndims != 3:
       raise ValueError("Expecting input_shape with 3 dims, got %d" %
                        input_shape.ndims)
@@ -255,7 +250,7 @@ class _PopnnRNN(ipu_layer.IPULayer):
         shapes = (shapes,)
 
       for _, shape in enumerate(shapes):
-        self.states.append(K.zeros(shape))
+        self.states.append(keras.backend.zeros(shape))
 
     self.built = True
 
@@ -475,7 +470,7 @@ class PopnnLSTM(_PopnnRNN):
       go_backwards=False,
       stateful=False,
       unroll=False,
-      partials_dtype=dtypes.float32,
+      partials_dtype=tf.float32,
       seed=None,
       time_major=False,
       # TODO(T54285): Remove `available_memory_proportion_[b|f]wd`.
@@ -578,13 +573,13 @@ class PopnnLSTM(_PopnnRNN):
 
       def bias_initializer(_, *args, **kwargs):
         # Forget gate is the second slice.
-        init = K.concatenate([
+        init = keras.backend.concatenate([
             self._bias_initializer((1, self.num_units), *args, **kwargs),
-            initializers.Ones()((1, self.num_units), *args, **kwargs),
+            keras.initializers.Ones()((1, self.num_units), *args, **kwargs),
             self._bias_initializer((2, self.num_units), *args, **kwargs),
         ],
-                             axis=0)
-        return array_ops.reshape(init, self.canonical_bias_shapes)
+                                         axis=0)
+        return tf.reshape(init, self.canonical_bias_shapes)
     else:
       bias_initializer = self._bias_initializer
 
@@ -617,19 +612,19 @@ class PopnnLSTM(_PopnnRNN):
     self._check_unsupported(mask, "mask", "call")
 
     if training is None:
-      training = K.learning_phase()
+      training = keras.backend.learning_phase()
 
     dtype = self._plain_dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
 
     if len(inputs.shape) != 3:
       raise ValueError("inputs tensor must be 3D")
 
     if not self._time_major:
       # Shuffle from Keras [B, S, N] to PopLibs [S, B, N]
-      inputs = array_ops.transpose(inputs, [1, 0, 2])
+      inputs = tf.transpose(inputs, [1, 0, 2])
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
     # PopnnLSTM doesn't support a dynamic training parameter. If the training
     # parameter is not constant, assume training.
@@ -643,18 +638,18 @@ class PopnnLSTM(_PopnnRNN):
       # Create a zero state.
       initial_state = self._zero_state(batch_size)
 
-    combined_kernel = array_ops.concat([self.kernel, self.recurrent_kernel], 0)
+    combined_kernel = tf.concat([self.kernel, self.recurrent_kernel], 0)
 
     h, c = initial_state
 
-    h = ops.convert_to_tensor(h, dtype=dtype)
-    c = ops.convert_to_tensor(c, dtype=dtype)
+    h = tf.convert_to_tensor(h, dtype=dtype)
+    c = tf.convert_to_tensor(c, dtype=dtype)
 
     if self._dropout > 0.:
       inputs = self._apply_dropout(inputs, training)
 
-    bias_tensor = array_ops.reshape(
-        self.biases, [self._num_gates_per_layer, self._num_units])
+    bias_tensor = tf.reshape(self.biases,
+                             [self._num_gates_per_layer, self._num_units])
 
     available_memory_proportion_fwd = -1. \
         if self._available_memory_proportion_fwd is None \
@@ -688,12 +683,12 @@ class PopnnLSTM(_PopnnRNN):
     if self._stateful:
       updates = []
       for state_, state in zip(self.states, (output_h, output_c)):
-        updates.append(state_ops.assign(state_, state))
+        updates.append(tf.compat.v1.assign(state_, state))
       self.add_update(updates)
 
     if not self._time_major:
       # Convert output from PopLibs [S, B, N] to Keras [B, S, N]
-      output = array_ops.transpose(output, [1, 0, 2])
+      output = tf.transpose(output, [1, 0, 2])
 
     if not self._return_sequences:
       output = output_h
@@ -719,8 +714,8 @@ class PopnnLSTM(_PopnnRNN):
   def _zero_state(self, batch_size):
     res = []
     for sp in self.state_shape(batch_size):
-      res.append(array_ops.zeros(sp, dtype=self.dtype))
-    return rnn_cell.LSTMStateTuple(*res)
+      res.append(tf.zeros(sp, dtype=self.dtype))
+    return _LSTMStateTuple(*res)
 
   def get_config(self):
     return {
@@ -731,11 +726,11 @@ class PopnnLSTM(_PopnnRNN):
         "recurrent_activation":
         self._recurrent_activation,
         "kernel_initializer":
-        initializers.serialize(self._kernel_initializer),
+        keras.initializers.serialize(self._kernel_initializer),
         "recurrent_initializer":
-        initializers.serialize(self._recurrent_initializer),
+        keras.initializers.serialize(self._recurrent_initializer),
         "bias_initializer":
-        initializers.serialize(self._bias_initializer),
+        keras.initializers.serialize(self._bias_initializer),
         "unit_forget_bias":
         self.unit_forget_bias,
         "dropout":
@@ -905,7 +900,7 @@ class PopnnGRU(_PopnnRNN):
       unroll=False,
       reset_after=True,
       seed=None,
-      partials_dtype=dtypes.float32,
+      partials_dtype=tf.float32,
       time_major=False,
       # TODO(T54285): Remove `available_memory_proportion_[b|f]wd`.
       available_memory_proportion_fwd=None,
@@ -1034,19 +1029,19 @@ class PopnnGRU(_PopnnRNN):
     self._check_unsupported(mask, "mask", "call")
 
     if training is None:
-      training = K.learning_phase()
+      training = keras.backend.learning_phase()
 
     dtype = self._plain_dtype
-    inputs = ops.convert_to_tensor(inputs, dtype=dtype)
+    inputs = tf.convert_to_tensor(inputs, dtype=dtype)
 
     if len(inputs.shape) != 3:
       raise ValueError("inputs tensor must be 3D")
 
     if not self._time_major:
       # Shuffle from Keras [B, S, N] to PopLibs [S, B, N]
-      inputs = array_ops.transpose(inputs, [1, 0, 2])
+      inputs = tf.transpose(inputs, [1, 0, 2])
 
-    batch_size = array_ops.shape(inputs)[1]
+    batch_size = tf.shape(inputs)[1]
 
     # PopnnGRU doesn't support a dynamic training parameter. If the training
     # parameter is not constant, assume training.
@@ -1060,22 +1055,21 @@ class PopnnGRU(_PopnnRNN):
       # Create a zero state.
       initial_state = self._zero_state(batch_size)
 
-    initial_state = ops.convert_to_tensor(initial_state, dtype=dtype)
+    initial_state = tf.convert_to_tensor(initial_state, dtype=dtype)
 
     if self._dropout > 0.:
       inputs = self._apply_dropout(inputs, training)
 
-    combined_kernel = array_ops.concat([self.kernel, self.recurrent_kernel], 0)
+    combined_kernel = tf.concat([self.kernel, self.recurrent_kernel], 0)
 
     if self._reset_after:
       # New shape: [self._num_gates_per_layer, 2, self._num_units]
-      bias_tensor = array_ops.stack(
-          array_ops.split(self.biases,
-                          [self._num_units] * self._num_gates_per_layer,
-                          axis=1))
+      bias_tensor = tf.stack(
+          tf.split(self.biases, [self._num_units] * self._num_gates_per_layer,
+                   axis=1))
     else:
-      bias_tensor = array_ops.reshape(
-          self.biases, [self._num_gates_per_layer, self._num_units])
+      bias_tensor = tf.reshape(self.biases,
+                               [self._num_gates_per_layer, self._num_units])
 
     available_memory_proportion_fwd = -1. \
         if self._available_memory_proportion_fwd is None \
@@ -1107,12 +1101,12 @@ class PopnnGRU(_PopnnRNN):
       output_state = self._extract_final_state(output)
 
     if self._stateful:
-      updates = [state_ops.assign(self.states[0], output_state)]
+      updates = [tf.compat.v1.assign(self.states[0], output_state)]
       self.add_update(updates)
 
     if not self._time_major:
       # Convert output from PopLibs [S, B, N] to Keras [B, S, N]
-      output = array_ops.transpose(output, [1, 0, 2])
+      output = tf.transpose(output, [1, 0, 2])
 
     if not self._return_sequences:
       output = output_state
@@ -1136,7 +1130,7 @@ class PopnnGRU(_PopnnRNN):
     return [batch_size, self.num_units]
 
   def _zero_state(self, batch_size):
-    return array_ops.zeros(self.state_shape(batch_size), dtype=self.dtype)
+    return tf.zeros(self.state_shape(batch_size), dtype=self.dtype)
 
   def get_config(self):
     return {
@@ -1147,11 +1141,11 @@ class PopnnGRU(_PopnnRNN):
         "recurrent_activation":
         self._recurrent_activation,
         "kernel_initializer":
-        initializers.serialize(self._kernel_initializer),
+        keras.initializers.serialize(self._kernel_initializer),
         "recurrent_initializer":
-        initializers.serialize(self._recurrent_initializer),
+        keras.initializers.serialize(self._recurrent_initializer),
         "bias_initializer":
-        initializers.serialize(self._bias_initializer),
+        keras.initializers.serialize(self._bias_initializer),
         "reset_after":
         self._reset_after,
         "dropout":

@@ -20,21 +20,12 @@ Dense Keras layer
 ~~~~~~~~~~~~~~~~~
 """
 
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor_shape
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.python.ipu.ops import math_ops as ipu_math_ops
-from tensorflow.python.keras import activations
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import Layer
-from tensorflow.python.keras.engine.input_spec import InputSpec
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
 
 
-class SerialDense(Layer):
+class SerialDense(keras.layers.Layer):
   """Densely-connected NN layer where the dot operation is serialized to reduce
   the size of this operation.
 
@@ -120,34 +111,35 @@ class SerialDense(Layer):
       kwargs['input_shape'] = (kwargs.pop('input_dim'),)
 
     super().__init__(
-        activity_regularizer=regularizers.get(activity_regularizer), **kwargs)
+        activity_regularizer=keras.regularizers.get(activity_regularizer),
+        **kwargs)
     self.serialization_factor = int(serialization_factor)
     self.serialization_dimension = serialization_dimension
 
     self.units = int(units) if not isinstance(units, int) else units
-    self.activation = activations.get(activation)
+    self.activation = keras.activations.get(activation)
     self.use_bias = use_bias
-    self.kernel_initializer = initializers.get(kernel_initializer)
-    self.bias_initializer = initializers.get(bias_initializer)
-    self.kernel_regularizer = regularizers.get(kernel_regularizer)
-    self.bias_regularizer = regularizers.get(bias_regularizer)
-    self.kernel_constraint = constraints.get(kernel_constraint)
-    self.bias_constraint = constraints.get(bias_constraint)
+    self.kernel_initializer = keras.initializers.get(kernel_initializer)
+    self.bias_initializer = keras.initializers.get(bias_initializer)
+    self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+    self.bias_regularizer = keras.regularizers.get(bias_regularizer)
+    self.kernel_constraint = keras.constraints.get(kernel_constraint)
+    self.bias_constraint = keras.constraints.get(bias_constraint)
 
     self.supports_masking = True
-    self.input_spec = InputSpec(min_ndim=2)
+    self.input_spec = keras.layers.InputSpec(min_ndim=2)
 
   def build(self, input_shape):
-    dtype = dtypes.as_dtype(self.dtype or K.floatx())
+    dtype = tf.as_dtype(self.dtype or keras.backend.floatx())
     if not (dtype.is_floating or dtype.is_complex):
       raise TypeError('Unable to build `SerialDense` layer with non-floating '
                       'point dtype %s' % (dtype,))
-    input_shape = tensor_shape.TensorShape(input_shape)
-    if tensor_shape.dimension_value(input_shape[-1]) is None:
+    input_shape = tf.TensorShape(input_shape)
+    if tf.compat.dimension_value(input_shape[-1]) is None:
       raise ValueError('The last dimension of the inputs to `SerialDense` '
                        'should be defined. Found `None`.')
-    last_dim = tensor_shape.dimension_value(input_shape[-1])
-    self.input_spec = InputSpec(min_ndim=2, axes={-1: last_dim})
+    last_dim = tf.compat.dimension_value(input_shape[-1])
+    self.input_spec = keras.layers.InputSpec(min_ndim=2, axes={-1: last_dim})
     self.kernel = self.add_weight('kernel',
                                   shape=[last_dim, self.units],
                                   initializer=self.kernel_initializer,
@@ -177,7 +169,7 @@ class SerialDense(Layer):
     Returns:
       The tensor resulting from applying the dense weights.
     """
-    if K.is_sparse(inputs):
+    if keras.backend.is_sparse(inputs):
       raise TypeError(
           'Unable to build `SerialDense` layer with sparse inputs.')
 
@@ -186,7 +178,7 @@ class SerialDense(Layer):
           'serialization_factor has to be at least 1, but was {}.'.format(
               self.serialization_factor))
 
-    inputs = math_ops.cast(inputs, self._compute_dtype)
+    inputs = tf.cast(inputs, self._compute_dtype)
 
     # Transform the dimension name.
     serialization_dimension = self.serialization_dimension
@@ -205,15 +197,15 @@ class SerialDense(Layer):
                                              self.serialization_factor,
                                              serialization_dimension)
     if self.use_bias:
-      outputs = nn.bias_add(outputs, self.bias)
+      outputs = tf.nn.bias_add(outputs, self.bias)
     if self.activation is not None:
       return self.activation(outputs)  # pylint: disable=not-callable
     return outputs
 
   def compute_output_shape(self, input_shape):
-    input_shape = tensor_shape.TensorShape(input_shape)
+    input_shape = tf.TensorShape(input_shape)
     input_shape = input_shape.with_rank_at_least(2)
-    if tensor_shape.dimension_value(input_shape[-1]) is None:
+    if tf.compat.dimension_value(input_shape[-1]) is None:
       raise ValueError(
           'The innermost dimension of input_shape must be defined, but saw: %s'
           % input_shape)
@@ -221,19 +213,30 @@ class SerialDense(Layer):
 
   def get_config(self):
     config = {
-        'units': self.units,
-        'serialization_factor': self.serialization_factor,
-        'serialization_dimension': self.serialization_dimension,
-        'activation': activations.serialize(self.activation),
-        'use_bias': self.use_bias,
-        'kernel_initializer': initializers.serialize(self.kernel_initializer),
-        'bias_initializer': initializers.serialize(self.bias_initializer),
-        'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
-        'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+        'units':
+        self.units,
+        'serialization_factor':
+        self.serialization_factor,
+        'serialization_dimension':
+        self.serialization_dimension,
+        'activation':
+        keras.activations.serialize(self.activation),
+        'use_bias':
+        self.use_bias,
+        'kernel_initializer':
+        keras.initializers.serialize(self.kernel_initializer),
+        'bias_initializer':
+        keras.initializers.serialize(self.bias_initializer),
+        'kernel_regularizer':
+        keras.regularizers.serialize(self.kernel_regularizer),
+        'bias_regularizer':
+        keras.regularizers.serialize(self.bias_regularizer),
         'activity_regularizer':
-        regularizers.serialize(self.activity_regularizer),
-        'kernel_constraint': constraints.serialize(self.kernel_constraint),
-        'bias_constraint': constraints.serialize(self.bias_constraint)
+        keras.regularizers.serialize(self.activity_regularizer),
+        'kernel_constraint':
+        keras.constraints.serialize(self.kernel_constraint),
+        'bias_constraint':
+        keras.constraints.serialize(self.bias_constraint)
     }
     base_config = super().get_config()
     return dict(list(base_config.items()) + list(config.items()))

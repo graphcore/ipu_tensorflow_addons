@@ -20,10 +20,10 @@ Embedding Keras layer
 ~~~~~~~~~~~~~~~~~~~~~
 """
 
+from tensorflow import keras
 from tensorflow.python.ipu.ops import embedding_ops
-from tensorflow.python.keras import initializers
+# TODO(T57433): Remove this once we move to a Keras package.
 from tensorflow.python.keras.utils import tf_utils
-
 from ipu_tensorflow_addons.keras.layers import ipu_layer
 
 
@@ -70,7 +70,8 @@ class Embedding(ipu_layer.IPULayer):
 
     self.input_dim = input_dim
     self.output_dim = output_dim
-    self.embeddings_initializer = initializers.get(embeddings_initializer)
+    self.embeddings_initializer = keras.initializers.get(
+        embeddings_initializer)
     self.serialization_factor = serialization_factor
 
     self._check_unsupported(embeddings_regularizer, 'embeddings_regularizer')
@@ -120,7 +121,7 @@ class Embedding(ipu_layer.IPULayer):
         'output_dim':
         self.output_dim,
         'embeddings_initializer':
-        initializers.serialize(self.embeddings_initializer),
+        keras.initializers.serialize(self.embeddings_initializer),
         'serialization_factor':
         self.serialization_factor,
     }

@@ -18,12 +18,10 @@
 
 import tempfile
 import numpy as np
+import tensorflow.compat.v2 as tf
 from absl.testing import parameterized
-from tensorflow.keras.optimizers.schedules import InverseTimeDecay
-from tensorflow.python.framework import constant_op, dtypes
-from tensorflow.python.ops import array_ops, math_ops, variables
+from tensorflow import keras
 from tensorflow.python.platform import googletest
-
 from ipu_tensorflow_addons.keras.optimizers import LAMBIpuOptimizer
 from ipu_tensorflow_addons.keras.optimizers.test_util import OptimizerTest
 
@@ -70,11 +68,11 @@ def lamb_update_numpy(param, g_t, t, m, v, learning_rate, weight_decay_rate,
 
 # pylint: disable=protected-access
 def get_beta_accumulators(opt):
-  local_step = math_ops.cast(opt.iterations + 1, opt.opt_dtypes[0])
-  beta_1_t = array_ops.identity(opt._get_hyper('beta_1', opt.opt_dtypes[0]))
-  beta_2_t = array_ops.identity(opt._get_hyper('beta_2', opt.opt_dtypes[0]))
-  beta_1_power = math_ops.pow(beta_1_t, local_step)
-  beta_2_power = math_ops.pow(beta_2_t, local_step)
+  local_step = tf.cast(opt.iterations + 1, opt.opt_dtypes[0])
+  beta_1_t = tf.identity(opt._get_hyper('beta_1', opt.opt_dtypes[0]))
+  beta_2_t = tf.identity(opt._get_hyper('beta_2', opt.opt_dtypes[0]))
+  beta_1_power = tf.pow(beta_1_t, local_step)
+  beta_2_power = tf.pow(beta_2_t, local_step)
   return beta_1_power, beta_2_power
 
 
@@ -85,7 +83,7 @@ class LAMBOptimizerTest(OptimizerTest):
                          epsilon=[1e-4],
                          weight_decay_rate=[0.0, 0.01, 0.05],
                          debiasing=[True, False],
-                         dtype=[dtypes.float32])
+                         dtype=[tf.float32])
   def test_functionality(self, learning_rate, beta_1, beta_2, epsilon,
                          weight_decay_rate, debiasing, dtype):
     m_0_np, v_0_np, m_1_np, v_1_np = 0.0, 0.0, 0.0, 0.0
@@ -94,10 +92,10 @@ class LAMBOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     opt = LAMBIpuOptimizer(
         learning_rate=learning_rate,
@@ -111,7 +109,7 @@ class LAMBOptimizerTest(OptimizerTest):
         v_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       beta_1_power, beta_2_power = get_beta_accumulators(opt)
@@ -168,7 +166,7 @@ class LAMBOptimizerTest(OptimizerTest):
                          epsilon=[1e-4],
                          weight_decay_rate=[0.01],
                          debiasing=[True, False],
-                         dtype=[dtypes.float32])
+                         dtype=[tf.float32])
   def test_functionality_lr_schedule(self, learning_rate, beta_1, beta_2,
                                      epsilon, weight_decay_rate, debiasing,
                                      dtype):
@@ -178,15 +176,15 @@ class LAMBOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     decay = 0.5
-    lr_schedule = InverseTimeDecay(learning_rate,
-                                   decay_steps=1.0,
-                                   decay_rate=decay)
+    lr_schedule = keras.optimizers.schedules.InverseTimeDecay(learning_rate,
+                                                              decay_steps=1.0,
+                                                              decay_rate=decay)
 
     opt = LAMBIpuOptimizer(
         learning_rate=lr_schedule,
@@ -200,7 +198,7 @@ class LAMBOptimizerTest(OptimizerTest):
         v_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       beta_1_power, beta_2_power = get_beta_accumulators(opt)
@@ -255,10 +253,10 @@ class LAMBOptimizerTest(OptimizerTest):
 
   @parameterized.product(
       mixed_prec_policy=["mixed_float16", "float16", "float32"],
-      m_dtype=[dtypes.float16, dtypes.float32, None],
-      v_dtype=[dtypes.float16, dtypes.float32, None],
-      optimizer_compute_precisions=[(dtypes.float16, dtypes.float16),
-                                    (dtypes.float32, dtypes.float16)],
+      m_dtype=[tf.float16, tf.float32, None],
+      v_dtype=[tf.float16, tf.float32, None],
+      optimizer_compute_precisions=[(tf.float16, tf.float16),
+                                    (tf.float32, tf.float16)],
       debiasing=[True, False],
   )
   def test_keras_mixed_precision_supported(self, mixed_prec_policy, m_dtype,

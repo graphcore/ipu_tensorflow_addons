@@ -22,13 +22,9 @@ Normalization Keras layers
 
 import operator
 from functools import reduce
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.compiler.plugin.poplar.ops import gen_popnn_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.ops import array_ops
-
 from ipu_tensorflow_addons.keras.layers import ipu_layer
 
 
@@ -80,8 +76,8 @@ class GroupNormalization(ipu_layer.IPULayer):
     self.scale = scale
     self.epsilon = epsilon
 
-    self.beta_initializer = initializers.get(beta_initializer)
-    self.gamma_initializer = initializers.get(gamma_initializer)
+    self.beta_initializer = keras.initializers.get(beta_initializer)
+    self.gamma_initializer = keras.initializers.get(gamma_initializer)
 
     self.strided_channel_grouping = strided_channel_grouping
 
@@ -150,16 +146,14 @@ class GroupNormalization(ipu_layer.IPULayer):
 
     # TensorFlow doesn't like constants being created in the build func.
     if not self.center:
-      self.beta = array_ops.constant(0.0, dtype=self.dtype, shape=params_shape)
+      self.beta = tf.constant(0.0, dtype=self.dtype, shape=params_shape)
 
     if not self.scale:
-      self.gamma = array_ops.constant(1.0,
-                                      dtype=self.dtype,
-                                      shape=params_shape)
+      self.gamma = tf.constant(1.0, dtype=self.dtype, shape=params_shape)
 
     # Flatten beta and gamma as this operation is 2D.
-    beta = array_ops.reshape(self.beta, [-1])
-    gamma = array_ops.reshape(self.gamma, [-1])
+    beta = tf.reshape(self.beta, [-1])
+    gamma = tf.reshape(self.gamma, [-1])
 
     def group_norm_training():
       outputs, _, _ = gen_popnn_ops.popnn_group_norm_training(
@@ -193,9 +187,9 @@ class GroupNormalization(ipu_layer.IPULayer):
           strided_channel_grouping=self.strided_channel_grouping)
       return outputs
 
-    outputs = K.in_train_phase(group_norm_training,
-                               group_norm_inference,
-                               training=training)
+    outputs = keras.backend.in_train_phase(group_norm_training,
+                                           group_norm_inference,
+                                           training=training)
 
     return outputs
 
@@ -206,8 +200,10 @@ class GroupNormalization(ipu_layer.IPULayer):
         "center": self.center,
         "scale": self.scale,
         "epsilon": self.epsilon,
-        "beta_initializer": initializers.serialize(self.beta_initializer),
-        "gamma_initializer": initializers.serialize(self.gamma_initializer),
+        "beta_initializer":
+        keras.initializers.serialize(self.beta_initializer),
+        "gamma_initializer":
+        keras.initializers.serialize(self.gamma_initializer),
         "strided_channel_grouping": self.strided_channel_grouping,
         "trainable": self.trainable,
     }
@@ -271,8 +267,10 @@ class InstanceNormalization(GroupNormalization):
         "center": self.center,
         "scale": self.scale,
         "epsilon": self.epsilon,
-        "beta_initializer": initializers.serialize(self.beta_initializer),
-        "gamma_initializer": initializers.serialize(self.gamma_initializer),
+        "beta_initializer":
+        keras.initializers.serialize(self.beta_initializer),
+        "gamma_initializer":
+        keras.initializers.serialize(self.gamma_initializer),
         "trainable": self.trainable,
     }
 
@@ -343,10 +341,10 @@ class LayerNormalization(GroupNormalization):
     self._check_unsupported(beta_constraint, "beta_constraint")
     self._check_unsupported(gamma_constraint, "gamma_constraint")
 
-    self.beta_regularizer = regularizers.get(beta_regularizer)
-    self.gamma_regularizer = regularizers.get(gamma_regularizer)
-    self.beta_constraint = constraints.get(beta_constraint)
-    self.gamma_constraint = constraints.get(gamma_constraint)
+    self.beta_regularizer = keras.regularizers.get(beta_regularizer)
+    self.gamma_regularizer = keras.regularizers.get(gamma_regularizer)
+    self.beta_constraint = keras.constraints.get(beta_constraint)
+    self.gamma_constraint = keras.constraints.get(gamma_constraint)
 
   def build(self, input_shape):
     ndims = len(input_shape)
@@ -410,19 +408,19 @@ class LayerNormalization(GroupNormalization):
     input_shape_2d = [num_non_reduced_elements, self.num_reduced_elements]
 
     # Permute the inputs to move the reduction and non reduction dimensions.
-    permuted = array_ops.transpose(inputs, self.permutation)
+    permuted = tf.transpose(inputs, self.permutation)
     permuted_shape = permuted.shape
     # Reshape into 2D.
-    permuted = array_ops.reshape(permuted, input_shape_2d)
+    permuted = tf.reshape(permuted, input_shape_2d)
 
     # Call the group norm.
     outputs = super().call(permuted, training)
 
     # Reshape back to the original shape.
-    outputs = array_ops.reshape(outputs, permuted_shape)
+    outputs = tf.reshape(outputs, permuted_shape)
     # Inverse the transpose.
-    outputs = array_ops.transpose(
-        outputs, array_ops.invert_permutation(self.permutation))
+    outputs = tf.transpose(outputs,
+                           tf.math.invert_permutation(self.permutation))
 
     # If some components of the shape got lost due to adjustments, fix that.
     outputs.set_shape(input_shape)
@@ -435,12 +433,16 @@ class LayerNormalization(GroupNormalization):
         "epsilon": self.epsilon,
         "center": self.center,
         "scale": self.scale,
-        "beta_initializer": initializers.serialize(self.beta_initializer),
-        "gamma_initializer": initializers.serialize(self.gamma_initializer),
-        "beta_regularizer": regularizers.serialize(self.beta_regularizer),
-        "gamma_regularizer": regularizers.serialize(self.gamma_regularizer),
-        "beta_constraint": constraints.serialize(self.beta_constraint),
-        "gamma_constraint": constraints.serialize(self.gamma_constraint),
+        "beta_initializer":
+        keras.initializers.serialize(self.beta_initializer),
+        "gamma_initializer":
+        keras.initializers.serialize(self.gamma_initializer),
+        "beta_regularizer":
+        keras.regularizers.serialize(self.beta_regularizer),
+        "gamma_regularizer":
+        keras.regularizers.serialize(self.gamma_regularizer),
+        "beta_constraint": keras.constraints.serialize(self.beta_constraint),
+        "gamma_constraint": keras.constraints.serialize(self.gamma_constraint),
         "trainable": self.trainable,
     }
 

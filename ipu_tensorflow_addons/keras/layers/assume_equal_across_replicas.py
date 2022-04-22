@@ -21,13 +21,13 @@ Assume Equal Across Replicas Keras layer
 """
 
 from tensorflow.python.ipu.ops import cross_replica_ops
-from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow import keras
 
 
-class AssumeEqualAcrossReplicas(Layer):
+class AssumeEqualAcrossReplicas(keras.layers.Layer):
   """
   Layer for marking values as equal across replicas to try and prevent divergent
-  control flow compilation errors.
+  control flow compilation tf.errors.
 
   Divergent control flow describes the situation where program flow differs
   among replicas. This happens when the value of a conditional is not the same

@@ -16,19 +16,14 @@
 # This file has been modified by Graphcore Ltd.
 # ==============================================================================
 """Adam optimizer implementation."""
-from __future__ import absolute_import, division, print_function
 
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
-from tensorflow.python.framework import ops
-from tensorflow.python.keras.optimizer_v2 import adam
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import math_ops
-
+from tensorflow import keras
 from ipu_tensorflow_addons.keras.optimizers import IpuOptimizerBase
 
 
-class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
+class AdamIpuOptimizer(keras.optimizers.Adam, IpuOptimizerBase):
   """Optimizer that implements the Adam algorithm.
 
   Adam optimization is a stochastic gradient descent method that is based on
@@ -109,25 +104,23 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
 
   def _create_slots(self, var_list):
     for var in var_list:
-      self.add_slot(var, 'm', dtype=self.get_slot_dtype(var, 'm'))
+      self.add_slot(var, 'm', dtype=self.get_slot_dtype(var, 'm'))  # pylint: disable=unexpected-keyword-arg
     for var in var_list:
-      self.add_slot(var, 'v', dtype=self.get_slot_dtype(var, 'v'))
+      self.add_slot(var, 'v', dtype=self.get_slot_dtype(var, 'v'))  # pylint: disable=unexpected-keyword-arg
     if self.amsgrad:
       for var in var_list:
-        self.add_slot(var, 'vhat', dtype=self.get_slot_dtype(var, 'vhat'))
+        self.add_slot(var, 'vhat', dtype=self.get_slot_dtype(var, 'vhat'))  # pylint: disable=unexpected-keyword-arg
 
   def _prepare_local(self, var_device, var_dtype, apply_state):
     super()._prepare_local(var_device, var_dtype, apply_state)
 
-    local_step = math_ops.cast(self.iterations + 1, self.opt_dtypes[0])
-    beta_1_t = array_ops.identity(self._get_hyper('beta_1',
-                                                  self.opt_dtypes[0]))
-    beta_2_t = array_ops.identity(self._get_hyper('beta_2',
-                                                  self.opt_dtypes[0]))
-    beta_1_power = math_ops.pow(beta_1_t, local_step)
-    beta_2_power = math_ops.pow(beta_2_t, local_step)
+    local_step = tf.cast(self.iterations + 1, self.opt_dtypes[0])
+    beta_1_t = tf.identity(self._get_hyper('beta_1', self.opt_dtypes[0]))
+    beta_2_t = tf.identity(self._get_hyper('beta_2', self.opt_dtypes[0]))
+    beta_1_power = tf.pow(beta_1_t, local_step)
+    beta_2_power = tf.pow(beta_2_t, local_step)
     apply_state[(var_device, var_dtype)].update(
-        dict(epsilon=ops.convert_to_tensor(self.epsilon, self.opt_dtypes[0]),
+        dict(epsilon=tf.convert_to_tensor(self.epsilon, self.opt_dtypes[0]),
              beta_1_t=beta_1_t,
              beta_1_power=beta_1_power,
              one_minus_beta_1_t=1 - beta_1_t,
@@ -154,22 +147,22 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
     assignments = []
 
     def grad_fn(grad, var, m, v, v_hat_t=None):
-      cast_grad = math_ops.cast(grad, dtype=compute_dtype)
-      cast_m = math_ops.cast(m, dtype=compute_dtype)
-      cast_v = math_ops.cast(v, dtype=compute_dtype)
+      cast_grad = tf.cast(grad, dtype=compute_dtype)
+      cast_m = tf.cast(m, dtype=compute_dtype)
+      cast_v = tf.cast(v, dtype=compute_dtype)
 
       # Update biased first moment estimate
       # m_t = beta1 * m_t-1 + (1 - beta1) * g_t
-      next_m = (math_ops.multiply(beta_1_t, cast_m) +
-                math_ops.multiply(1.0 - beta_1_t, cast_grad))
+      next_m = (tf.multiply(beta_1_t, cast_m) +
+                tf.multiply(1.0 - beta_1_t, cast_grad))
 
       # Update biased second raw moment estimate
       # v_t = beta2 * v_t-1 + (1 - beta2) * g_t^2
-      next_v = (math_ops.multiply(beta_2_t, cast_v) +
-                math_ops.multiply(1.0 - beta_2_t, math_ops.square(cast_grad)))
+      next_v = (tf.multiply(beta_2_t, cast_v) +
+                tf.multiply(1.0 - beta_2_t, tf.square(cast_grad)))
 
-      next_m_cast = math_ops.cast(next_m, dtype=m_dtype)
-      next_v_cast = math_ops.cast(next_v, dtype=v_dtype)
+      next_m_cast = tf.cast(next_m, dtype=m_dtype)
+      next_v_cast = tf.cast(next_v, dtype=v_dtype)
 
       if self.debiasing:
         # Compute bias-corrected first moment estimate
@@ -185,8 +178,8 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
       if self.amsgrad:
         # Get maximum of past second raw moment estimate
         # v_hat = max(v_hat_t-1, v_hat)
-        v_hat_t = math_ops.maximum(v_hat_t, v_hat)
-        next_v_hat_t_cast = math_ops.cast(v_hat_t, dtype=v_hat_dtype)
+        v_hat_t = tf.maximum(v_hat_t, v_hat)
+        next_v_hat_t_cast = tf.cast(v_hat_t, dtype=v_hat_dtype)
       else:
         v_hat_t = v_hat
         next_v_hat_t_cast = None
@@ -194,12 +187,11 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
       # Update parameters
       # var_t = var_t-1 - lr * m_hat / (sqrt(v_hat) + epsilon)
 
-      update = m_hat / (math_ops.sqrt(v_hat_t) + coefficients['epsilon'])
+      update = m_hat / (tf.sqrt(v_hat_t) + coefficients['epsilon'])
 
-      update_with_lr = math_ops.cast(coefficients['lr_t'],
-                                     compute_dtype) * update
+      update_with_lr = tf.cast(coefficients['lr_t'], compute_dtype) * update
 
-      next_var = var - math_ops.cast(update_with_lr, var.dtype)
+      next_var = var - tf.cast(update_with_lr, var.dtype)
 
       return next_var, next_v_cast, next_m_cast, next_v_hat_t_cast
 
@@ -220,7 +212,7 @@ class AdamIpuOptimizer(adam.Adam, IpuOptimizerBase):
         v.assign(next_v),
     ])
 
-    return control_flow_ops.group(*assignments)
+    return tf.group(*assignments)
 
   def _resource_apply_dense(self, grad, var, apply_state=None):
     return self._adam_step(grad, var, apply_state)

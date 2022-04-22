@@ -17,14 +17,12 @@
 # ==============================================================================
 
 import numpy as np
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
 from tensorflow.python.client import session as sl
-from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
-
 from ipu_tensorflow_addons.keras import layers
 
 
@@ -42,7 +40,7 @@ class RNNDropoutTest(test_util.TensorFlowTestCase):
         result_no_dropout = ipu.ipu_compiler.compile(model_fn(0.0))
 
       ipu.utils.move_variable_initialization_to_cpu()
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.compat.v1.global_variables_initializer())
       output_dropout = sess.run(result_dropout)[0]
       output_no_dropout = sess.run(result_no_dropout)[0]
 
@@ -79,7 +77,7 @@ class RNNDropoutTest(test_util.TensorFlowTestCase):
                             return_state=False,
                             return_sequences=True,
                             unit_forget_bias=False)
-        inputs = constant_op.constant(1.0, shape=(6, 2, 5))
+        inputs = tf.constant(1.0, shape=(6, 2, 5))
         return layer(inputs, training=True)
 
       return model
@@ -102,7 +100,7 @@ class RNNDropoutTest(test_util.TensorFlowTestCase):
                            dropout=dropout,
                            return_state=False,
                            return_sequences=True)
-        inputs = constant_op.constant(1.0, shape=(6, 2, 5))
+        inputs = tf.constant(1.0, shape=(6, 2, 5))
         return layer(inputs, training=True)
 
       return model

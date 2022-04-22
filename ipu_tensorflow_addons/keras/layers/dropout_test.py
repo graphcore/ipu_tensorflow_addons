@@ -18,11 +18,9 @@
 """Test for IPU Dropout layer."""
 
 import numpy as np
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import ops
+import tensorflow.compat.v2 as tf
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
-
 from ipu_tensorflow_addons.keras import layers
 
 dataType = np.float32
@@ -80,7 +78,8 @@ class IPUDropoutTest(test.TestCase):
     x = np.random.rand((num_elements)).astype(dataType)
 
     output = kerasIPUDropout(x, seed=[42, 42], training=True)
-    self.assertTrue(isinstance(output, (ops.Tensor, ops.EagerTensor)))
+    self.assertTrue(
+        isinstance(output, (tf.Tensor, tf.__internal__.EagerTensor)))
 
   def testIllegalRate(self):
     with self.assertRaisesRegex(
@@ -89,7 +88,7 @@ class IPUDropoutTest(test.TestCase):
 
   @test_util.run_v2_only
   def testGetConfig(self):
-    seed = constant_op.constant([0, 0])
+    seed = tf.constant([0, 0])
     layer = layers.Dropout(rate=0.5, seed=seed)
     config = layer.get_config()
     layer2 = layers.Dropout.from_config(config)

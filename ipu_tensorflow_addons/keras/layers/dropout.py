@@ -20,14 +20,14 @@ Dropout Keras layer
 ~~~~~~~~~~~~~~~~~~~
 """
 
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.python.ipu.ops import rand_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.engine.base_layer import Layer
+# TODO(T57433): Remove this once we move to a Keras package.
 from tensorflow.python.keras.utils import tf_utils
-from tensorflow.python.ops import array_ops
 
 
-class Dropout(Layer):
+class Dropout(keras.layers.Layer):
   """Dropout layer optimized for running on the IPU.
 
   The Dropout layer randomly sets input units to 0 with a frequency of `rate`
@@ -80,9 +80,9 @@ class Dropout(Layer):
                               ref=self.ref,
                               name=self.name)
 
-    output = K.in_train_phase(dropped_inputs,
-                              lambda: array_ops.identity(inputs),
-                              training=training)
+    output = keras.backend.in_train_phase(dropped_inputs,
+                                          lambda: tf.identity(inputs),
+                                          training=training)
 
     return output
 

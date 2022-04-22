@@ -18,13 +18,10 @@
 """Tests for IPU Embedding layer."""
 
 import numpy as np
-from tensorflow.python import keras
-from tensorflow.python.eager import def_function
-from tensorflow.python.framework import constant_op
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import nn
 from tensorflow.python.platform import test
-
 from ipu_tensorflow_addons.keras import layers
 
 dataType = np.float32
@@ -41,7 +38,7 @@ def kerasIPUEmbeddingLookup(params, ids, name=None, serialization_factor=1):
       serialization_factor=serialization_factor)
   layer.build(input_shape=ids.shape)
 
-  @def_function.function
+  @tf.function
   def impl(ids):
     return layer(inputs=ids)
 
@@ -50,16 +47,16 @@ def kerasIPUEmbeddingLookup(params, ids, name=None, serialization_factor=1):
 
 class IPUEmbeddingLookupTest(test.TestCase):
   def testEmbeddingLookup(self):
-    ids = constant_op.constant([[1, 2, 3]])
+    ids = tf.constant([[1, 2, 3]])
     paras = np.array([[10], [20], [80], [40]])
-    emb_lookup_tf = nn.embedding_lookup(paras, ids)
+    emb_lookup_tf = tf.nn.embedding_lookup(paras, ids)
     emb_lookup_ipu = kerasIPUEmbeddingLookup(paras, ids, name="emb_test_0")
     self.assertAllClose(emb_lookup_tf, emb_lookup_ipu)
 
   def testEmbeddingLookupBatchSize2(self):
-    ids = constant_op.constant([[1, 2, 3], [3, 4, 5]])
+    ids = tf.constant([[1, 2, 3], [3, 4, 5]])
     paras = np.array([[10], [20], [80], [40], [50], [60]])
-    emb_lookup_tf = nn.embedding_lookup(paras, ids)
+    emb_lookup_tf = tf.nn.embedding_lookup(paras, ids)
     emb_lookup_ipu = kerasIPUEmbeddingLookup(paras, ids, name="emb_test_1")
     self.assertAllClose(emb_lookup_tf, emb_lookup_ipu)
 
@@ -79,9 +76,9 @@ class IPUEmbeddingLookupTest(test.TestCase):
       kerasIPUEmbeddingLookup(paras, ids, name="emb_test_4")
 
   def testEmbeddingLookupSerialization(self):
-    ids = constant_op.constant([[1, 2, 3]])
+    ids = tf.constant([[1, 2, 3]])
     paras = np.array([[10], [20], [80], [40]])
-    emb_lookup_tf = nn.embedding_lookup(paras, ids)
+    emb_lookup_tf = tf.nn.embedding_lookup(paras, ids)
     emb_lookup_ipu = kerasIPUEmbeddingLookup(paras,
                                              ids,
                                              name="emb_test_5",

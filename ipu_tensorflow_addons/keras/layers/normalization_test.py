@@ -17,13 +17,11 @@
 # ==============================================================================
 """Tests for IPU Norm layers."""
 
+import tensorflow.compat.v2 as tf
 import numpy as np
-from tensorflow.python.eager import def_function
-from tensorflow.python.framework import dtypes
+from tensorflow import keras
 from tensorflow.python.platform import test
-from tensorflow.python import keras
 from tensorflow.python.framework import test_util
-
 from ipu_tensorflow_addons.keras import layers
 
 dataType = np.float32
@@ -33,7 +31,7 @@ def keras_instance(x, training=True, **kwargs):
   layer = layers.InstanceNormalization(**kwargs)
   layer.build(x.shape)
 
-  @def_function.function
+  @tf.function
   def impl(x, training):
     return layer(inputs=x, training=training)
 
@@ -44,7 +42,7 @@ def keras_layer(x, training=True, **kwargs):
   layer = layers.LayerNormalization(**kwargs)
   layer.build(x.shape)
 
-  @def_function.function
+  @tf.function
   def impl(x, training):
     return layer(inputs=x, training=training)
 
@@ -55,7 +53,7 @@ def keras_upstream_layer(x, training=True, **kwargs):
   layer = keras.layers.LayerNormalization(**kwargs)
   layer.build(x.shape)
 
-  @def_function.function
+  @tf.function
   def impl(x, training):
     return layer(inputs=x, training=training)
 
@@ -75,7 +73,7 @@ def keras_group(x, training=True, **kwargs):
   layer = layers.GroupNormalization(**kwargs)
   layer.build(x.shape)
 
-  @def_function.function
+  @tf.function
   def impl(x, training):
     return layer(inputs=x, training=training)
 
@@ -194,16 +192,16 @@ class GroupNormTest(test.TestCase):
   def testDtype(self):
     layer = layers.GroupNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float32 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float32 for w in layer.weights))
 
-    layer = layers.GroupNormalization(dtype=dtypes.float16)
+    layer = layers.GroupNormalization(dtype=tf.float16)
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
 
     keras.backend.set_floatx('float16')
     layer = layers.GroupNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
     keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
@@ -347,16 +345,16 @@ class LayerTest(test.TestCase):
   def testDtype(self):
     layer = layers.LayerNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float32 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float32 for w in layer.weights))
 
-    layer = layers.LayerNormalization(dtype=dtypes.float16)
+    layer = layers.LayerNormalization(dtype=tf.float16)
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
 
     keras.backend.set_floatx('float16')
     layer = layers.LayerNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
     keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
@@ -469,16 +467,16 @@ class InstanceTest(test.TestCase):
   def testDtype(self):
     layer = layers.InstanceNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float32 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float32 for w in layer.weights))
 
-    layer = layers.InstanceNormalization(dtype=dtypes.float16)
+    layer = layers.InstanceNormalization(dtype=tf.float16)
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
 
     keras.backend.set_floatx('float16')
     layer = layers.InstanceNormalization()
     layer.build((1, 1, 1, 2))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer.weights))
     keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only

@@ -18,22 +18,11 @@
 """Tests for IPU LSTM layers."""
 
 import numpy as np
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
-from tensorflow.python import keras
-from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.eager import def_function
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import errors
-from tensorflow.python.framework import ops
+from tensorflow import keras
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras.layers import recurrent_v2
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
-
 from ipu_tensorflow_addons.keras import layers
 
 # Test hyperparameters.
@@ -45,10 +34,10 @@ data_type = np.float32
 
 
 def test_language_dataset(length=None):
-  constant_d = constant_op.constant(1, shape=[32], dtype=np.int32)
-  constant_l = constant_op.constant(2, shape=[32], dtype=np.int32)
+  constant_d = tf.constant(1, shape=[32], dtype=np.int32)
+  constant_l = tf.constant(2, shape=[32], dtype=np.int32)
 
-  ds = dataset_ops.Dataset.from_tensors((constant_d, constant_l))
+  ds = tf.data.Dataset.from_tensors((constant_d, constant_l))
   ds = ds.repeat(length)
   ds = ds.batch(batch_size, drop_remainder=True)
 
@@ -67,11 +56,11 @@ def _getLSTMLayer(keras_layer=None,
                   bias_initializer=None,
                   **kwargs):
   kernel_initializer = (kernel_initializer if kernel_initializer else
-                        init_ops.constant_initializer(0.1, data_type))
+                        tf.constant_initializer(0.1))
   recurrent_initializer = (recurrent_initializer if recurrent_initializer else
-                           init_ops.constant_initializer(0.2, data_type))
-  bias_initializer = (bias_initializer if bias_initializer else
-                      init_ops.constant_initializer(0.3, data_type))
+                           tf.constant_initializer(0.2))
+  bias_initializer = (bias_initializer
+                      if bias_initializer else tf.constant_initializer(0.3))
   return keras_layer(num_hidden,
                      dtype=data_type,
                      kernel_initializer=kernel_initializer,
@@ -101,12 +90,12 @@ def _kerasLSTMImpl(instance,
                    unit_forget_bias=False,
                    stateful=False):
 
-  with ops.device(device):
-    x = array_ops.placeholder(x_vals[0].dtype, x_vals[0].shape)
-    h = array_ops.placeholder(h_val.dtype, h_val.shape)
-    c = array_ops.placeholder(c_val.dtype, c_val.shape)
+  with tf.device(device):
+    x = tf.compat.v1.placeholder(x_vals[0].dtype, x_vals[0].shape)
+    h = tf.compat.v1.placeholder(h_val.dtype, h_val.shape)
+    c = tf.compat.v1.placeholder(c_val.dtype, c_val.shape)
 
-    state = None if stateful else rnn_cell.LSTMStateTuple(c, h)
+    state = None if stateful else (c, h)
 
     layer = _getLSTMLayer(keras_layer, return_state, return_sequences,
                           time_major, dropout, unit_forget_bias, stateful)
@@ -114,7 +103,7 @@ def _kerasLSTMImpl(instance,
     shapes = [w.shape for w in layer.get_weights()]
 
   with instance.test_session() as sess:
-    sess.run(variables.global_variables_initializer())
+    sess.run(tf.compat.v1.global_variables_initializer())
     outputs = []
 
     # Run the op and any updates.
@@ -134,7 +123,7 @@ def _lstmIPU(*args, **kwargs):
 
 
 def _lstmCPU(*args, **kwargs):
-  return _kerasLSTMImpl(*args, **kwargs, keras_layer=recurrent_v2.LSTM)
+  return _kerasLSTMImpl(*args, **kwargs, keras_layer=keras.layers.LSTM)
 
 
 class IpuLstmTest(test.TestCase):
@@ -264,17 +253,14 @@ class IpuLstmTest(test.TestCase):
     layer = layers.PopnnLSTM(
         num_hidden,
         dtype=data_type,
-        kernel_initializer=init_ops.random_uniform_initializer(
-            seed=42, dtype=data_type),
-        recurrent_initializer=init_ops.random_uniform_initializer(
-            seed=42, dtype=data_type),
-        bias_initializer=init_ops.zeros_initializer(dtype=data_type))
+        kernel_initializer=tf.random_uniform_initializer(seed=42),
+        recurrent_initializer=tf.random_uniform_initializer(seed=42),
+        bias_initializer=tf.zeros_initializer())
     layer.build(x[0].shape)
 
-    @def_function.function
+    @tf.function
     def impl(x, c, h):
-      state = rnn_cell.LSTMStateTuple(c, h)
-      return layer(inputs=x, initial_state=state)
+      return layer(inputs=x, initial_state=(c, h))
 
     self.assertEqual(layer.kernel.shape, [num_input, num_hidden * 4])
     _ = impl(x[0], c, h)
@@ -320,7 +306,7 @@ class IpuLstmTest(test.TestCase):
     xs, _, _ = self._get_random_inputs()
     x = xs[0]
     # Run on CPU
-    layer_cpu = _getLSTMLayer(recurrent_v2.LSTM,
+    layer_cpu = _getLSTMLayer(keras.layers.LSTM,
                               kernel_initializer='truncated_normal',
                               recurrent_initializer='normal',
                               bias_initializer='truncated_normal')
@@ -344,16 +330,16 @@ class IpuLstmTest(test.TestCase):
 
     layer_ipu = layers.PopnnLSTM(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float32 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float32 for w in layer_ipu.weights))
 
-    layer_ipu = layers.PopnnLSTM(num_hidden, dtype=dtypes.float16)
+    layer_ipu = layers.PopnnLSTM(num_hidden, dtype=tf.float16)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer_ipu.weights))
 
     keras.backend.set_floatx('float16')
     layer_ipu = layers.PopnnLSTM(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer_ipu.weights))
     keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
@@ -370,7 +356,7 @@ class IpuLstmTest(test.TestCase):
     y = np.random.rand(batch_size, num_hidden).astype(data_type)
 
     # Setup CPU LSTM layer
-    layer_cpu = _getLSTMLayer(recurrent_v2.LSTM,
+    layer_cpu = _getLSTMLayer(keras.layers.LSTM,
                               kernel_initializer='truncated_normal',
                               recurrent_initializer='normal',
                               bias_initializer='truncated_normal',
@@ -395,7 +381,7 @@ class IpuLstmTest(test.TestCase):
 
     strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
-      layer_ipu = _getLSTMLayer(recurrent_v2.LSTM, return_state=False)
+      layer_ipu = _getLSTMLayer(keras.layers.LSTM, return_state=False)
       layer_ipu.build((batch_size, timesteps, num_input))
       layer_ipu.set_weights(initial_weights)
 
@@ -436,7 +422,7 @@ class IpuLstmTest(test.TestCase):
     strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       input_layer = keras.layers.Input(shape=(32),
-                                       dtype=dtypes.int32,
+                                       dtype=tf.int32,
                                        batch_size=batch_size)
 
       with ipu.keras.PipelineStage(0):
@@ -508,9 +494,9 @@ class IpuLstmTest(test.TestCase):
         model.fit((x_fit, h, c), y, batch_size=batch_size)
 
     error_msg = r'\[Poplar\]\[Build graph\] invalid_option:.*'
-    with self.assertRaisesRegex(errors.InternalError, error_msg):
+    with self.assertRaisesRegex(tf.errors.InternalError, error_msg):
       run_layer(options={'availableMemoryProportion': -273.15})
-    with self.assertRaisesRegex(errors.InternalError, error_msg):
+    with self.assertRaisesRegex(tf.errors.InternalError, error_msg):
       run_layer(options_bwd={'availableMemoryProportion': -273.15})
     run_layer(options={'availableMemoryProportion': 0.42})
     run_layer(options_bwd={'availableMemoryProportion': 0.42})
@@ -563,12 +549,10 @@ def _getGRULayer(keras_layer=None,
                  recurrent_initializer=None,
                  bias_initializer=None,
                  **kwargs):
-  kernel_initializer = (kernel_initializer
-                        or init_ops.constant_initializer(0.1, data_type))
+  kernel_initializer = (kernel_initializer or tf.constant_initializer(0.1))
   recurrent_initializer = (recurrent_initializer
-                           or init_ops.constant_initializer(0.2, data_type))
-  bias_initializer = (bias_initializer
-                      or init_ops.constant_initializer(0.3, data_type))
+                           or tf.constant_initializer(0.2))
+  bias_initializer = (bias_initializer or tf.constant_initializer(0.3))
   return keras_layer(num_hidden,
                      dtype=data_type,
                      kernel_initializer=kernel_initializer,
@@ -597,9 +581,9 @@ def _kerasGRUImpl(instance,
                   stateful=False,
                   reset_after=False):
 
-  with ops.device(device):
-    x = array_ops.placeholder(x_vals[0].dtype, x_vals[0].shape)
-    init_ph = array_ops.placeholder(init_val.dtype, init_val.shape)
+  with tf.device(device):
+    x = tf.compat.v1.placeholder(x_vals[0].dtype, x_vals[0].shape)
+    init_ph = tf.compat.v1.placeholder(init_val.dtype, init_val.shape)
 
     init = None if stateful else init_ph
 
@@ -608,7 +592,7 @@ def _kerasGRUImpl(instance,
     output = layer(inputs=x, initial_state=init, training=training)
 
   with instance.test_session() as sess:
-    sess.run(variables.global_variables_initializer())
+    sess.run(tf.compat.v1.global_variables_initializer())
     outputs = []
 
     # Run the op and any updates.
@@ -628,7 +612,7 @@ def _gruIPU(*args, **kwargs):
 
 
 def _gruCPU(*args, **kwargs):
-  return _kerasGRUImpl(*args, **kwargs, keras_layer=recurrent_v2.GRU)
+  return _kerasGRUImpl(*args, **kwargs, keras_layer=keras.layers.GRU)
 
 
 class IpuGruTest(test.TestCase):
@@ -784,7 +768,7 @@ class IpuGruTest(test.TestCase):
     x = xs[0]
 
     # Run on CPU
-    layer_cpu = _getGRULayer(recurrent_v2.GRU,
+    layer_cpu = _getGRULayer(keras.layers.GRU,
                              kernel_initializer='truncated_normal',
                              recurrent_initializer='normal',
                              bias_initializer='truncated_normal')
@@ -812,7 +796,7 @@ class IpuGruTest(test.TestCase):
     y = np.random.rand(batch_size, num_hidden).astype(data_type)
 
     # Setup CPU GRU layer
-    layer_cpu = _getGRULayer(recurrent_v2.GRU,
+    layer_cpu = _getGRULayer(keras.layers.GRU,
                              kernel_initializer='truncated_normal',
                              recurrent_initializer='normal',
                              bias_initializer='truncated_normal',
@@ -837,7 +821,7 @@ class IpuGruTest(test.TestCase):
     strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       # Setup IPU GRU layer
-      layer_ipu = _getGRULayer(recurrent_v2.GRU,
+      layer_ipu = _getGRULayer(keras.layers.GRU,
                                reset_after=True,
                                return_state=False)
       layer_ipu.build((batch_size, timesteps, num_input))
@@ -869,16 +853,16 @@ class IpuGruTest(test.TestCase):
 
     layer_ipu = layers.PopnnGRU(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float32 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float32 for w in layer_ipu.weights))
 
-    layer_ipu = layers.PopnnGRU(num_hidden, dtype=dtypes.float16)
+    layer_ipu = layers.PopnnGRU(num_hidden, dtype=tf.float16)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer_ipu.weights))
 
     keras.backend.set_floatx('float16')
     layer_ipu = layers.PopnnGRU(num_hidden)
     layer_ipu.build((batch_size, timesteps, num_input))
-    self.assertTrue(all(w.dtype == dtypes.float16 for w in layer_ipu.weights))
+    self.assertTrue(all(w.dtype == tf.float16 for w in layer_ipu.weights))
     keras.backend.set_floatx('float32')
 
   @test_util.run_v2_only
@@ -895,7 +879,7 @@ class IpuGruTest(test.TestCase):
     y = np.random.rand(batch_size, num_hidden).astype(data_type)
 
     # Setup CPU GRU layer
-    layer_cpu = _getGRULayer(recurrent_v2.GRU,
+    layer_cpu = _getGRULayer(keras.layers.GRU,
                              kernel_initializer='truncated_normal',
                              recurrent_initializer='normal',
                              bias_initializer='truncated_normal',
@@ -973,9 +957,9 @@ class IpuGruTest(test.TestCase):
         model.fit((x_fit, init), y, batch_size=batch_size)
 
     error_msg = r'\[Poplar\]\[Build graph\] invalid_option:.*'
-    with self.assertRaisesRegex(errors.InternalError, error_msg):
+    with self.assertRaisesRegex(tf.errors.InternalError, error_msg):
       run_layer(options={'availableMemoryProportion': -273.15})
-    with self.assertRaisesRegex(errors.InternalError, error_msg):
+    with self.assertRaisesRegex(tf.errors.InternalError, error_msg):
       run_layer(options_bwd={'availableMemoryProportion': -273.15})
     run_layer(options={'availableMemoryProportion': 0.42})
     run_layer(options_bwd={'availableMemoryProportion': 0.42})

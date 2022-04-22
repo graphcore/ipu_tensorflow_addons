@@ -18,17 +18,15 @@
 
 from unittest import mock
 import numpy as np
+import tensorflow.compat.v2 as tf
+from tensorflow import keras
 from absl.testing import parameterized
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python import keras
-from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import test_util
 from tensorflow.python.ipu.config import IPUConfig
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import math_ops
 from tensorflow.python.platform import googletest
+from ipu_tensorflow_addons.keras import layers as ipu_layers
 
 
 def create_n_replica_ipu_config(ipu_count):
@@ -42,11 +40,10 @@ def create_n_replica_ipu_config(ipu_count):
 
 class ConditionalLayer(keras.layers.Layer):
   def call(self, inputs, **kwargs):  # pylint: disable=unused-argument
-    c = constant_op.constant(0, shape=inputs.shape, dtype=inputs.dtype)
-    x = math_ops.reduce_all(math_ops.greater(inputs, c))
-    y = control_flow_ops.cond(
-        x, lambda: ipu.cross_replica_ops.cross_replica_sum(inputs),
-        lambda: constant_op.constant(0, shape=(2, 4), dtype=inputs.dtype))
+    c = tf.constant(0, shape=inputs.shape, dtype=inputs.dtype)
+    x = tf.reduce_all(tf.greater(inputs, c))
+    y = tf.cond(x, lambda: ipu.cross_replica_ops.cross_replica_sum(inputs),
+                lambda: tf.constant(0, shape=(2, 4), dtype=inputs.dtype))
     return y
 
 
@@ -75,8 +72,7 @@ class TestKerasAssumeEqual(test_util.TensorFlowTestCase,
                                        name="layer0",
                                        kernel_initializer=init)(input_layer)
 
-      assume_equals_layer = ipu.keras.layers.AssumeEqualAcrossReplicas()(
-          dense_layer)
+      assume_equals_layer = ipu_layers.AssumeEqualAcrossReplicas()(dense_layer)
       conditional_layer = ConditionalLayer()(assume_equals_layer)
 
       # Without the AssumeEqualAcrossReplicas layer we should get a Divergent
@@ -91,8 +87,8 @@ class TestKerasAssumeEqual(test_util.TensorFlowTestCase,
   @test_util.deprecated_graph_mode_only
   @mock.patch.object(ipu.ops.cross_replica_ops, "assume_equal_across_replicas")
   def testLayerUsesAssumeEqualOp(self, inplace, mock_op):
-    placeholder = array_ops.placeholder(np.single, 32)
-    ipu.keras.layers.AssumeEqualAcrossReplicas(inplace)(placeholder)
+    placeholder = tf.compat.v1.placeholder(np.single, 32)
+    ipu_layers.AssumeEqualAcrossReplicas(inplace)(placeholder)
 
     mock_op.assert_called_with(placeholder, inplace)
 
@@ -100,7 +96,7 @@ class TestKerasAssumeEqual(test_util.TensorFlowTestCase,
   @tu.skip_on_hw
   @test_util.run_v2_only
   def testGetConfig(self, inplace):
-    layer = ipu.keras.layers.AssumeEqualAcrossReplicas(inplace)
+    layer = ipu_layers.AssumeEqualAcrossReplicas(inplace)
     self.assertEqual(layer.get_config()["inplace"], inplace)
 
 

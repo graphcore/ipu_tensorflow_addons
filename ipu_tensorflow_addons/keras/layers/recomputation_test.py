@@ -18,15 +18,12 @@
 """Tests for IPU Keras pipeline recomputation."""
 
 import pva
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python import keras
-from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.framework import constant_op
+from tensorflow import keras
 from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
-from tensorflow.python.training import gradient_descent
-
 from ipu_tensorflow_addons.keras import layers
 
 
@@ -47,9 +44,9 @@ class KerasPipelineRecomputationTest(test.TestCase):
     BATCH_SIZE = 1
     NUM_FILTERS = 4
 
-    constant_d = constant_op.constant(1.0, shape=IM_SIZE)
-    constant_l = constant_op.constant(0.2, shape=[2])
-    ds = dataset_ops.Dataset.from_tensors((constant_d, constant_l))
+    constant_d = tf.constant(1.0, shape=IM_SIZE)
+    constant_l = tf.constant(0.2, shape=[2])
+    ds = tf.data.Dataset.from_tensors((constant_d, constant_l))
     ds = ds.repeat(64)
     ds = ds.batch(BATCH_SIZE, drop_remainder=True)
 
@@ -76,7 +73,7 @@ class KerasPipelineRecomputationTest(test.TestCase):
           pipeline_schedule=ipu.ops.pipelining_ops.PipelineSchedule.Grouped,
           recomputation_mode=ipu.ops.pipelining_ops.RecomputationMode.
           RecomputeAndBackpropagateInterleaved)
-      opt = gradient_descent.GradientDescentOptimizer(0.001)
+      opt = keras.optimizers.SGD(0.001)
       m.compile(opt, loss='mse', steps_per_execution=8)
       return m
 

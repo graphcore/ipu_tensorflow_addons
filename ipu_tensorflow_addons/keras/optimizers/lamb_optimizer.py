@@ -19,16 +19,8 @@
 
 import re
 
-import tensorflow as tf
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import linalg_ops
-from tensorflow.python.ops import math_ops
-
 from ipu_tensorflow_addons.keras.optimizers import IpuOptimizerBase
 
 
@@ -56,7 +48,7 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
       m_dtype=None,
       v_dtype=None,
       weight_norm_clip=None,
-      optimizer_compute_precisions=(dtypes.float32, dtypes.float32),
+      optimizer_compute_precisions=(tf.float32, tf.float32),
       **kwargs,
   ):
     """
@@ -124,24 +116,24 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
 
   def _create_slots(self, var_list):
     for var in var_list:
-      self.add_slot(var, 'm', dtype=self.get_slot_dtype(var, 'm'))
+      self.add_slot(var, 'm', dtype=self.get_slot_dtype(var, 'm'))  # pylint: disable=unexpected-keyword-arg
     for var in var_list:
-      self.add_slot(var, 'v', dtype=self.get_slot_dtype(var, 'v'))
+      self.add_slot(var, 'v', dtype=self.get_slot_dtype(var, 'v'))  # pylint: disable=unexpected-keyword-arg
 
   def _prepare_local(self, var_device, var_dtype, apply_state):
     super()._prepare_local(var_device, var_dtype, apply_state)
     compute_dtype = self.opt_dtypes[0]
-    local_step = math_ops.cast(self.iterations + 1, compute_dtype)
-    beta_1_t = array_ops.identity(self._get_hyper("beta_1", compute_dtype))
-    beta_2_t = array_ops.identity(self._get_hyper("beta_2", compute_dtype))
-    weight_decay_rate = array_ops.identity(
+    local_step = tf.cast(self.iterations + 1, compute_dtype)
+    beta_1_t = tf.identity(self._get_hyper("beta_1", compute_dtype))
+    beta_2_t = tf.identity(self._get_hyper("beta_2", compute_dtype))
+    weight_decay_rate = tf.identity(
         self._get_hyper("weight_decay_rate", compute_dtype))
-    beta_1_power = math_ops.pow(beta_1_t, local_step)
-    beta_2_power = math_ops.pow(beta_2_t, local_step)
+    beta_1_power = tf.pow(beta_1_t, local_step)
+    beta_2_power = tf.pow(beta_2_t, local_step)
     apply_state[(var_device, var_dtype)].update(
         dict(
             weight_decay_rate=weight_decay_rate,
-            epsilon=ops.convert_to_tensor(self.epsilon, compute_dtype),
+            epsilon=tf.convert_to_tensor(self.epsilon, compute_dtype),
             beta_1_t=beta_1_t,
             beta_1_power=beta_1_power,
             one_minus_beta_1_t=1 - beta_1_t,
@@ -168,22 +160,22 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
     assignments = []
 
     def grad_fn(grad, var, m, v):
-      cast_grad = math_ops.cast(grad, dtype=compute_dtype)
-      cast_m = math_ops.cast(m, dtype=compute_dtype)
-      cast_v = math_ops.cast(v, dtype=compute_dtype)
+      cast_grad = tf.cast(grad, dtype=compute_dtype)
+      cast_m = tf.cast(m, dtype=compute_dtype)
+      cast_v = tf.cast(v, dtype=compute_dtype)
 
       # Update biased first moment estimate
       # m_t = beta1 * m_t-1 + (1 - beta1) * g_t
-      next_m = (math_ops.multiply(beta_1_t, cast_m) +
-                math_ops.multiply(1.0 - beta_1_t, cast_grad))
+      next_m = (tf.multiply(beta_1_t, cast_m) +
+                tf.multiply(1.0 - beta_1_t, cast_grad))
 
       # Update biased second raw moment estimate
       # v_t = beta2 * v_t-1 + (1 - beta2) * g_t^2
-      next_v = (math_ops.multiply(beta_2_t, cast_v) +
-                math_ops.multiply(1.0 - beta_2_t, math_ops.square(cast_grad)))
+      next_v = (tf.multiply(beta_2_t, cast_v) +
+                tf.multiply(1.0 - beta_2_t, tf.square(cast_grad)))
 
-      next_m_cast = math_ops.cast(next_m, dtype=m_dtype)
-      next_v_cast = math_ops.cast(next_v, dtype=v_dtype)
+      next_m_cast = tf.cast(next_m, dtype=m_dtype)
+      next_v_cast = tf.cast(next_v, dtype=v_dtype)
 
       if self.debiasing:
         # Compute bias-corrected first moment estimate
@@ -198,52 +190,49 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
 
       # Compute ratio
       # m_hat / (sqrt(v_hat) + epsilon)
-      update = m_hat / (math_ops.sqrt(v_hat) + coefficients['epsilon'])
+      update = m_hat / (tf.sqrt(v_hat) + coefficients['epsilon'])
 
       # Apply weight decay
       if self._do_use_weight_decay(var_name):
-        update += math_ops.cast(var, update.dtype) * math_ops.cast(
-            self.weight_decay_rate, update.dtype)
+        update += tf.cast(var, update.dtype) * tf.cast(self.weight_decay_rate,
+                                                       update.dtype)
 
-      reshaped_update = array_ops.reshape(update, [-1])
+      reshaped_update = tf.reshape(update, [-1])
 
       ratio = 1.0
 
       # Do layer wise normalisation on update
       if self._do_layer_adaptation(var_name):
-        reshaped_param = array_ops.reshape(var, [-1])
+        reshaped_param = tf.reshape(var, [-1])
 
-        w_norm = linalg_ops.norm(math_ops.cast(reshaped_param,
-                                               dtype=compute_dtype),
-                                 ord=2,
-                                 axis=-1)
-        u_norm = linalg_ops.norm(reshaped_update, ord=2, axis=-1)
+        w_norm = tf.norm(tf.cast(reshaped_param, dtype=compute_dtype),
+                         ord=2,
+                         axis=-1)
+        u_norm = tf.norm(reshaped_update, ord=2, axis=-1)
 
         # Clip norm of parameters by value
         if self.weight_norm_clip is not None:
-          w_norm = math_ops.minimum(
-              w_norm, math_ops.cast(self.weight_norm_clip, dtype=w_norm.dtype))
+          w_norm = tf.minimum(
+              w_norm, tf.cast(self.weight_norm_clip, dtype=w_norm.dtype))
 
-        w_norm_cast = math_ops.cast(w_norm, dtype=compute_dtype)
-        u_norm_cast = math_ops.cast(u_norm, dtype=compute_dtype)
+        w_norm_cast = tf.cast(w_norm, dtype=compute_dtype)
+        u_norm_cast = tf.cast(u_norm, dtype=compute_dtype)
 
-        ratio = array_ops.where(
-            math_ops.greater(w_norm, 0),
-            array_ops.where(
-                math_ops.greater(u_norm, 0), w_norm_cast / u_norm_cast,
-                constant_op.constant(1.0,
-                                     dtype=compute_dtype,
-                                     shape=w_norm.shape)),
-            constant_op.constant(1.0, dtype=compute_dtype, shape=w_norm.shape))
-        ratio = array_ops.reshape(ratio, shape=ratio.shape.as_list() + [1])
+        ratio = tf.where(
+            tf.greater(w_norm, 0),
+            tf.where(tf.greater(u_norm, 0), w_norm_cast / u_norm_cast,
+                     tf.constant(1.0, dtype=compute_dtype,
+                                 shape=w_norm.shape)),
+            tf.constant(1.0, dtype=compute_dtype, shape=w_norm.shape))
+        ratio = tf.reshape(ratio, shape=ratio.shape.as_list() + [1])
 
       # Perform parameter update
-      ratio = math_ops.cast(coefficients['lr_t'], compute_dtype) * ratio
-      ratio = math_ops.cast(ratio, dtype=apply_ratio_dtype)
-      reshaped_update = math_ops.cast(reshaped_update, dtype=apply_ratio_dtype)
+      ratio = tf.cast(coefficients['lr_t'], compute_dtype) * ratio
+      ratio = tf.cast(ratio, dtype=apply_ratio_dtype)
+      reshaped_update = tf.cast(reshaped_update, dtype=apply_ratio_dtype)
       update_with_lr = ratio * reshaped_update
-      update_with_lr = array_ops.reshape(update_with_lr, shape=var.shape)
-      update_with_lr = math_ops.cast(update_with_lr, dtype=var.dtype)
+      update_with_lr = tf.reshape(update_with_lr, shape=var.shape)
+      update_with_lr = tf.cast(update_with_lr, dtype=var.dtype)
 
       next_var = var - update_with_lr
 
@@ -258,7 +247,7 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
         [handle.assign(next_var),
          m.assign(next_m),
          v.assign(next_v)])
-    return control_flow_ops.group(*assignments)
+    return tf.group(*assignments)
 
   def _resource_apply_sparse(self, grad, handle, indices, apply_state):
     raise NotImplementedError(

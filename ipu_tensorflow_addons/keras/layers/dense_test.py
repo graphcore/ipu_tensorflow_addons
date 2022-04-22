@@ -17,14 +17,12 @@
 # ==============================================================================
 
 import numpy as np
+import tensorflow.compat.v2 as tf
 from absl.testing import parameterized
 from tensorflow.python import ipu
-from tensorflow.python.eager import backprop
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import math_ops
 from tensorflow.python.platform import googletest
-
-from tensorflow.python.keras.layers import Dense
+from tensorflow.keras.layers import Dense
 from ipu_tensorflow_addons.keras.layers import SerialDense
 
 TEST_CASES = ({
@@ -97,10 +95,10 @@ class SerialDenseTest(test_util.TensorFlowTestCase, parameterized.TestCase):
       return kernel_val
 
     def func(layer):
-      with backprop.GradientTape() as t:
+      with tf.GradientTape() as t:
         output = layer(input_val)
         # Not a real loss function, but good enough for testing backprop.
-        loss = math_ops.reduce_sum(output)
+        loss = tf.reduce_sum(output)
       grads = t.gradient(loss, layer.weights)
       return grads
 

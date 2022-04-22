@@ -20,11 +20,11 @@ Recomputation Keras layers
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
-from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow import keras
 from tensorflow.python.ipu.ops import pipelining_ops
 
 
-class RecomputationCheckpoint(Layer):
+class RecomputationCheckpoint(keras.layers.Layer):
   """
   Layer for checkpointing values in a computational pipeline stage.
   When recomputation is enabled, these values will not be recomputed and they

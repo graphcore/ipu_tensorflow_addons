@@ -17,17 +17,13 @@
 # ==============================================================================
 """SGD optimizer implementation."""
 
-import tensorflow as tf
+import tensorflow.compat.v2 as tf
 from tensorflow.python import ipu
-from tensorflow.python.keras.optimizer_v2 import gradient_descent
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import math_ops
-
+from tensorflow import keras
 from ipu_tensorflow_addons.keras.optimizers import IpuOptimizerBase
 
 
-class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
+class SGDIpuOptimizer(keras.optimizers.SGD, IpuOptimizerBase):
   """Optimizer that implements the gradient descent algorithm with momentum.
 
   This optimizer allows setting the optimizer state precisions differently to
@@ -80,14 +76,15 @@ class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
   def _create_slots(self, var_list):
     if self._momentum:
       for var in var_list:
-        self.add_slot(var,
-                      'momentum',
-                      dtype=self.get_slot_dtype(var, 'momentum'))
+        self.add_slot(  # pylint: disable=unexpected-keyword-arg
+            var,
+            'momentum',
+            dtype=self.get_slot_dtype(var, 'momentum'))
 
   def _prepare_local(self, var_device, var_dtype, apply_state):
     super(SGDIpuOptimizer, self)._prepare_local(var_device, var_dtype,
                                                 apply_state)
-    apply_state[(var_device, var_dtype)]["momentum"] = array_ops.identity(
+    apply_state[(var_device, var_dtype)]["momentum"] = tf.identity(
         self._get_hyper("momentum", self.opt_dtypes[0]))
 
   def _sgd_step(self, grad, var, apply_state):
@@ -111,10 +108,10 @@ class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
     assignments = []
 
     def grad_fn(grad, var, accum):
-      cast_grad = math_ops.cast(grad, compute_dtype)
-      cast_accum = math_ops.cast(accum, compute_dtype)
+      cast_grad = tf.cast(grad, compute_dtype)
+      cast_accum = tf.cast(accum, compute_dtype)
 
-      lr = math_ops.cast(coefficients['lr_t'], compute_dtype)
+      lr = tf.cast(coefficients['lr_t'], compute_dtype)
 
       # Update accumulator
       # velocity = momentum * velocity - learning_rate * g
@@ -123,14 +120,14 @@ class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
       if self.nesterov:
         # Parameter update for Nesterov momentum:
         # velocity = momentum * velocity - learning_rate * g
-        next_var = var + math_ops.cast(next_accum * momentum - lr * cast_grad,
-                                       var.dtype)
+        next_var = var + tf.cast(next_accum * momentum - lr * cast_grad,
+                                 var.dtype)
       else:
         # Parameter update:
         # w = w + velocity
-        next_var = var + math_ops.cast(next_accum, var.dtype)
+        next_var = var + tf.cast(next_accum, var.dtype)
 
-      next_accum_cast = math_ops.cast(next_accum, mom_accum_dtype)
+      next_accum_cast = tf.cast(next_accum, mom_accum_dtype)
 
       return next_var, next_accum_cast
 
@@ -142,7 +139,7 @@ class SGDIpuOptimizer(gradient_descent.SGD, IpuOptimizerBase):
     assignments.extend(
         [var.assign(next_var),
          mom_accum.assign(next_mom_accum)])
-    return control_flow_ops.group(*assignments)
+    return tf.group(*assignments)
 
   def _resource_apply_dense(self, grad, var, apply_state=None):
     if self._momentum:

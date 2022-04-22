@@ -21,19 +21,13 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import pva
 import numpy as np
+from tensorflow.compat import v1 as tf
 from tensorflow.python import ipu
 from tensorflow.python.ipu import test_utils as tu
-from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
-import pva
-
 from ipu_tensorflow_addons.v1 import layers
 
 dataType = np.float16
@@ -48,22 +42,22 @@ def _PopnnGRU(x, initial_state):
   gru_cell = layers.PopnnGRU(
       num_hidden,
       dtype=dataType,
-      weights_initializer=init_ops.zeros_initializer(dtype=dataType),
-      bias_initializer=init_ops.constant_initializer(2.0, dtype=dataType))
+      weights_initializer=tf.zeros_initializer(dtype=dataType),
+      bias_initializer=tf.constant_initializer(2.0, dtype=dataType))
   return gru_cell(x, initial_state=initial_state, training=False)
 
 
 def _tfGRU(x, initial_state):
-  gru_cell = rnn_cell.GRUCell(
+  gru_cell = tf.nn.rnn_cell.GRUCell(
       num_hidden,
       name='gru_cell',
-      kernel_initializer=init_ops.zeros_initializer(dtype=dataType),
-      bias_initializer=init_ops.constant_initializer(2.0, dtype=dataType))
-  return rnn.dynamic_rnn(gru_cell,
-                         x,
-                         dtype=dataType,
-                         initial_state=initial_state,
-                         time_major=True)
+      kernel_initializer=tf.zeros_initializer(dtype=dataType),
+      bias_initializer=tf.constant_initializer(2.0, dtype=dataType))
+  return tf.nn.dynamic_rnn(gru_cell,
+                           x,
+                           dtype=dataType,
+                           initial_state=initial_state,
+                           time_major=True)
 
 
 class GRUSizeTest(test_util.TensorFlowTestCase):
@@ -75,14 +69,14 @@ class GRUSizeTest(test_util.TensorFlowTestCase):
     cfg.configure_ipu_system()
 
     with self.session() as sess:
-      with ops.device('cpu'):
-        px = array_ops.placeholder(dataType, shape=x.shape)
-        pinitial_state = array_ops.placeholder(dataType,
-                                               shape=[batch_size, num_hidden])
+      with tf.device('cpu'):
+        px = tf.placeholder(dataType, shape=x.shape)
+        pinitial_state = tf.placeholder(dataType,
+                                        shape=[batch_size, num_hidden])
       with ipu.scopes.ipu_scope("/device:IPU:0"):
         r = ipu.ipu_compiler.compile(layer_func, inputs=[px, pinitial_state])
 
-      sess.run(variables.global_variables_initializer())
+      sess.run(tf.global_variables_initializer())
       report_helper.clear_reports()
       result = sess.run(r, {
           px: x,

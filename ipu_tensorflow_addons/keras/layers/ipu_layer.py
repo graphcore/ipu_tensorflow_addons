@@ -20,14 +20,14 @@ Base IPU Keras layer
 ~~~~~~~~~~~~~~~~~~~~~
 """
 
-from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow import keras
 
 
-class IPULayer(Layer):
+class IPULayer(keras.layers.Layer):
   def _check_unsupported(self, arg, arg_name, method="__init__"):
     if arg:
       raise NotImplementedError(
-          "ipu.keras.%s does not support %s"
+          "ipu_tensorflow_addons.keras.layers.%s does not support %s"
           " argument %s. It is included for API consistency"
           "with keras.%s." %
           (self.__class__.__name__, method, arg_name, self.__class__.__name__))

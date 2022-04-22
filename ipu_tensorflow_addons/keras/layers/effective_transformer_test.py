@@ -17,17 +17,13 @@
 # ==============================================================================
 """Test for IPU Keras Effective Transformer layers."""
 
+import tensorflow.compat.v2 as tf
 import numpy as np
 from absl.testing import parameterized
 from tensorflow.python import ipu
-from tensorflow.python import keras
-from tensorflow.python.ipu import ipu_strategy
-from tensorflow.python.eager import def_function
-from tensorflow.python.eager.backprop import GradientTape
+from tensorflow import keras
 from tensorflow.python.framework import test_util
-from tensorflow.python.ops import init_ops
 from tensorflow.python.platform import googletest
-
 from ipu_tensorflow_addons.keras.layers import EffectiveTransformer
 
 
@@ -212,7 +208,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
   def testInference(self, output_layer_size, max_batch_size, from_seq_lens,
                     to_seq_lens, from_row_len, to_row_len, dtype, seq_per_iter,
                     use_scale, q_mask, attention_heads, attention_head_size):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -244,7 +240,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
       # Build an Effective Transformer.
       transformer = EffectiveTransformer(**transformer_kwargs)
 
-      @def_function.function(experimental_compile=True)
+      @tf.function(experimental_compile=True)
       def f(inputs):
         return transformer(inputs)
 
@@ -263,7 +259,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                          from_seq_lens, to_seq_lens, from_row_len, to_row_len,
                          dtype, seq_per_iter, use_scale, q_mask,
                          attention_heads, attention_head_size):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -320,7 +316,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
 
       model = keras.Model(inputs=input_layers, outputs=x)
 
-      opt = keras.optimizer_v2.gradient_descent.SGD(learning_rate=0.001)
+      opt = keras.optimizers.SGD(learning_rate=0.001)
       model.compile(opt, loss='mse')
 
       res = model.predict(input_tensors, batch_size=from_sequences.shape[0])
@@ -337,7 +333,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
   def testTraining(self, output_layer_size, max_batch_size, from_seq_lens,
                    to_seq_lens, from_row_len, to_row_len, dtype, seq_per_iter,
                    use_scale, q_mask, attention_heads, attention_head_size):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -368,11 +364,11 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
 
       # Build an Effective Transformer.
       transformer = EffectiveTransformer(**transformer_kwargs)
-      opt = keras.optimizer_v2.gradient_descent.SGD(learning_rate=0.01)
+      opt = keras.optimizers.SGD(learning_rate=0.01)
 
-      @def_function.function(experimental_compile=True)
+      @tf.function(experimental_compile=True)
       def f(inputs, targets):
-        with GradientTape() as tape:
+        with tf.GradientTape() as tape:
           y = transformer(inputs)[0]
           l = keras.losses.mean_squared_error(targets, y)
 
@@ -396,7 +392,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                         to_seq_lens, from_row_len, to_row_len, dtype,
                         seq_per_iter, use_scale, q_mask, attention_heads,
                         attention_head_size):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -453,7 +449,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
 
       model = keras.Model(inputs=input_layers, outputs=x)
 
-      opt = keras.optimizer_v2.gradient_descent.SGD(learning_rate=0.1)
+      opt = keras.optimizers.SGD(learning_rate=0.1)
       model.compile(opt, 'mse')
 
       history = model.fit(input_tensors,
@@ -485,7 +481,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
       q_mask,  # pylint: disable=unused-argument
       attention_heads,
       attention_head_size):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -499,10 +495,10 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
           'num_attention_heads': attention_heads,
           'attention_head_size': attention_head_size,
           'sequences_per_iter': seq_per_iter,
-          'embedding_initializer': init_ops.ones_initializer(),
-          'output_initializer': init_ops.ones_initializer(),
-          'embedding_bias_initializer': init_ops.zeros_initializer(),
-          'output_bias_initializer': init_ops.zeros_initializer()
+          'embedding_initializer': tf.ones_initializer(),
+          'output_initializer': tf.ones_initializer(),
+          'embedding_bias_initializer': tf.zeros_initializer(),
+          'output_bias_initializer': tf.zeros_initializer()
       }
 
       transformer = EffectiveTransformer(**transformer_kwargs)
@@ -516,7 +512,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
   @parameterized.named_parameters(*SEQUENCE_PADDING_TEST_CASES)
   def testSequenceUnpad(self, padded_sequence, unpadded_sequence,
                         sequence_lengths):
-    strategy = ipu_strategy.IPUStrategyV1()
+    strategy = ipu.ipu_strategy.IPUStrategyV1()
     with strategy.scope():
       cfg = ipu.config.IPUConfig()
       cfg.ipu_model.compile_ipu_code = False
@@ -525,7 +521,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
 
       num_sequences = len(sequence_lengths)
 
-      @def_function.function(experimental_compile=True)
+      @tf.function(experimental_compile=True)
       def f():
         transformer = EffectiveTransformer(12, 10)
         # pylint: disable=protected-access

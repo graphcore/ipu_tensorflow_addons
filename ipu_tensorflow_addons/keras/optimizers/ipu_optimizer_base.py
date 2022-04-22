@@ -20,25 +20,24 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-import six
+import tensorflow.compat.v2 as tf
 from tensorflow.python.distribute import \
   distribution_strategy_context as distribute_ctx
-from tensorflow.python.framework import dtypes
-from tensorflow.python.keras import backend, initializers
-from tensorflow.python.keras.optimizer_v2 import optimizer_v2
-from tensorflow.python.keras.optimizer_v2.optimizer_v2 import _var_key
-from tensorflow.python.ops import variables as tf_variables
+from tensorflow import keras
 from tensorflow.python.training.tracking import base as trackable
+# TODO(T57433): Remove this once we move to a Keras package.
+from tensorflow.python.keras.optimizer_v2 import optimizer_v2
+from tensorflow.python.keras import backend as tf_k_backend
 
 
-class IpuOptimizerBase(optimizer_v2.OptimizerV2):
+class IpuOptimizerBase(keras.optimizers.Optimizer):
   """Base class for optimizers utilising mixed precision and IPU
   features. Should not be used directly but instead you should
   instantiate one of its subclasses.
   """
   def __init__(self,
                name,
-               optimizer_compute_precisions=(dtypes.float32,),
+               optimizer_compute_precisions=(tf.float32,),
                outline_apply_gradients=False,
                outline_apply_gradients_kwargs=None,
                **kwargs):
@@ -111,17 +110,17 @@ class IpuOptimizerBase(optimizer_v2.OptimizerV2):
     Returns:
       A slot variable.
     """
-    # This function is a copy of the `OptimizerV2.add_slot()` function with
+    # This function is a copy of the `Optimizer.add_slot()` function with
     # extra handling for the `dtype` to allow for mixed precision.
     if slot_name not in self._slot_names:
       self._slot_names.append(slot_name)
-    var_key = _var_key(var)
+    var_key = optimizer_v2._var_key(var)  # pylint: disable=protected-access
     slot_dict = self._slots.setdefault(var_key, {})
     weight = slot_dict.get(slot_name, None)
     dtype = dtype or self.get_slot_dtype(var, slot_name) or var.dtype
     if weight is None:
       if isinstance(initializer, str) or callable(initializer):
-        initializer = initializers.get(initializer)
+        initializer = keras.initializers.get(initializer)
         if isinstance(
             initializer,
             trackable.CheckpointInitialValueCallable) or (shape is not None):
@@ -146,12 +145,12 @@ class IpuOptimizerBase(optimizer_v2.OptimizerV2):
               format(strategy, var))
 
         with strategy.extended.colocate_vars_with(var):
-          weight = tf_variables.Variable(
+          weight = tf.Variable(
               name="%s/%s" % (var._shared_name, slot_name),  # pylint: disable=protected-access
               dtype=dtype,
               trainable=False,
               initial_value=initial_value)
-      backend.track_variable(weight)
+      tf_k_backend.track_variable(weight)
       slot_dict[slot_name] = weight
       self._restore_slot_variable(slot_name=slot_name,
                                   variable=var,

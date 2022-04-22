@@ -18,13 +18,10 @@
 
 import tempfile
 import numpy as np
+import tensorflow.compat.v2 as tf
 from absl.testing import parameterized
-from tensorflow.keras.optimizers.schedules import InverseTimeDecay
-from tensorflow.python.framework import constant_op
-from tensorflow.python.framework import dtypes
-from tensorflow.python.ops import variables
+from tensorflow import keras
 from tensorflow.python.platform import googletest
-
 from ipu_tensorflow_addons.keras.optimizers import SGDIpuOptimizer
 from ipu_tensorflow_addons.keras.optimizers.test_util import OptimizerTest
 
@@ -54,7 +51,7 @@ class SGDOptimizerTest(OptimizerTest):
       learning_rate=[0.01, 0.001],
       momentum=[0.0, 0.9],
       nesterov=[False, True],
-      dtype=[dtypes.float32],
+      dtype=[tf.float32],
   )
   def test_functionality(
       self,
@@ -69,10 +66,10 @@ class SGDOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     opt = SGDIpuOptimizer(
         learning_rate=learning_rate,
@@ -82,7 +79,7 @@ class SGDOptimizerTest(OptimizerTest):
         momentum_accum_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for _ in range(3):
       opt.apply_gradients(zip([grads0, grads1], [var0, var1]))
@@ -115,7 +112,7 @@ class SGDOptimizerTest(OptimizerTest):
       learning_rate=[0.01, 0.001],
       momentum=[0.0, 0.9],
       nesterov=[False, True],
-      dtype=[dtypes.float32],
+      dtype=[tf.float32],
   )
   def test_functionality_lr_schedule(
       self,
@@ -130,15 +127,15 @@ class SGDOptimizerTest(OptimizerTest):
     grads0_np = np.array([0.1, 0.0, 0.1], dtype=dtype.as_numpy_dtype)
     grads1_np = np.array([0.01, 0.0, 0.01], dtype=dtype.as_numpy_dtype)
 
-    var0 = variables.Variable(var0_np, name="var0", dtype=dtype)
-    var1 = variables.Variable(var1_np, name="var1", dtype=dtype)
-    grads0 = constant_op.constant(grads0_np, dtype=dtype)
-    grads1 = constant_op.constant(grads1_np, dtype=dtype)
+    var0 = tf.Variable(var0_np, name="var0", dtype=dtype)
+    var1 = tf.Variable(var1_np, name="var1", dtype=dtype)
+    grads0 = tf.constant(grads0_np, dtype=dtype)
+    grads1 = tf.constant(grads1_np, dtype=dtype)
 
     decay = 0.5
-    lr_schedule = InverseTimeDecay(learning_rate,
-                                   decay_steps=1.0,
-                                   decay_rate=decay)
+    lr_schedule = keras.optimizers.schedules.InverseTimeDecay(learning_rate,
+                                                              decay_steps=1.0,
+                                                              decay_rate=decay)
 
     opt = SGDIpuOptimizer(
         learning_rate=lr_schedule,
@@ -148,7 +145,7 @@ class SGDOptimizerTest(OptimizerTest):
         momentum_accum_dtype=dtype,
     )
 
-    self.evaluate(variables.global_variables_initializer())
+    self.evaluate(tf.compat.v1.global_variables_initializer())
 
     for t in range(3):
       opt.apply_gradients(zip([grads0, grads1], [var0, var1]))
@@ -177,8 +174,8 @@ class SGDOptimizerTest(OptimizerTest):
 
   @parameterized.product(
       mixed_prec_policy=["mixed_float16", "float16", "float32"],
-      mom_accum_dtype=[dtypes.float16, dtypes.float32, None],
-      optimizer_compute_precisions=[(dtypes.float16,), (dtypes.float32,)],
+      mom_accum_dtype=[tf.float16, tf.float32, None],
+      optimizer_compute_precisions=[(tf.float16,), (tf.float32,)],
       momentum=[0.0, 0.9],
   )
   def test_keras_mixed_precision_supported(self, mixed_prec_policy,
