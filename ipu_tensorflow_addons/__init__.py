@@ -22,7 +22,17 @@ try:
   from tensorflow.python import ipu
   # Remove the reference we just created from this namespace.
   del ipu
-except ModuleNotFoundError:
+except ModuleNotFoundError as exception:
   raise ImportError(
       "Failed to import IPU TensorFlow. Make sure you have IPU TensorFlow "
-      "installed, and not a different TensorFlow release.")
+      "installed, and not a different TensorFlow release.") from exception
+
+try:
+  # Test if IPU Keras is available.
+  from keras import ipu
+  # Remove the reference we just created from this namespace.
+  del ipu
+except ModuleNotFoundError as exception:
+  raise ImportError(
+      "Failed to import IPU Keras. Make sure you have IPU Keras "
+      "installed, and not a different Keras release.") from exception

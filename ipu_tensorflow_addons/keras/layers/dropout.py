@@ -20,11 +20,10 @@ Dropout Keras layer
 ~~~~~~~~~~~~~~~~~~~
 """
 
+from keras.utils import tf_utils
 import tensorflow.compat.v2 as tf
 from tensorflow import keras
 from tensorflow.python.ipu.ops import rand_ops
-# TODO(T57433): Remove this once we move to a Keras package.
-from tensorflow.python.keras.utils import tf_utils
 
 
 class Dropout(keras.layers.Layer):

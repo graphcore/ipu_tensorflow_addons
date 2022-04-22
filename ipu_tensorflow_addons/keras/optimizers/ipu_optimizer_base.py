@@ -20,14 +20,13 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
+from keras.optimizer_v2 import optimizer_v2
+from keras import backend
 import tensorflow.compat.v2 as tf
 from tensorflow.python.distribute import \
   distribution_strategy_context as distribute_ctx
 from tensorflow import keras
 from tensorflow.python.training.tracking import base as trackable
-# TODO(T57433): Remove this once we move to a Keras package.
-from tensorflow.python.keras.optimizer_v2 import optimizer_v2
-from tensorflow.python.keras import backend as tf_k_backend
 
 
 class IpuOptimizerBase(keras.optimizers.Optimizer):
@@ -150,7 +149,7 @@ class IpuOptimizerBase(keras.optimizers.Optimizer):
               dtype=dtype,
               trainable=False,
               initial_value=initial_value)
-      tf_k_backend.track_variable(weight)
+      backend.track_variable(weight)
       slot_dict[slot_name] = weight
       self._restore_slot_variable(slot_name=slot_name,
                                   variable=var,

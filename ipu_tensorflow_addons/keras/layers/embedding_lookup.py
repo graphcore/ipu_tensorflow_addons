@@ -20,10 +20,9 @@ Embedding Keras layer
 ~~~~~~~~~~~~~~~~~~~~~
 """
 
+from keras.utils import tf_utils
 from tensorflow import keras
 from tensorflow.python.ipu.ops import embedding_ops
-# TODO(T57433): Remove this once we move to a Keras package.
-from tensorflow.python.keras.utils import tf_utils
 from ipu_tensorflow_addons.keras.layers import ipu_layer
 
 

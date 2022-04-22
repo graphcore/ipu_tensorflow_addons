@@ -10,10 +10,12 @@ cd $DIR
 
 print_usage_and_exit() {
   cat <<EOM
-Usage: $0 TENSORFLOW-WHEEL-PATH [--help|-h] [--venv-path VENV-PATH] [--no-user-bazelrc] [--environment-variables VARIABLES] [--disk-cache|-c CACHE-FOLDER]
+Usage: $0 TENSORFLOW-WHEEL-PATH KERAS-WHEEL-PATH [--help|-h] [--venv-path VENV-PATH] [--no-user-bazelrc] [--environment-variables VARIABLES] [--disk-cache|-c CACHE-FOLDER]
 
   TENSORFLOW-WHEEL-PATH
       The path to the IPU TensorFlow .whl file you want to build IPU TensorFlow Addons for.
+  KERAS-WHEEL-PATH
+      The path to the IPU Keras .whl file you want to build IPU TensorFlow Addons for.
   -h, --help
       Print this help message.
   --venv-path VENV-PATH
@@ -81,13 +83,15 @@ done
 # Parse positional args
 eval set -- "$POSITIONAL_ARGS"
 
-if [[ "$#" -ne 1 ]]
+if [[ "$#" -ne 2 ]]
 	then
 	  echo "ERROR: incorrect or missing parameters"
     print_usage_and_exit
 fi
 
 TENSORFLOW_WHEEL_PATH=$1
+shift
+KERAS_WHEEL_PATH=$1
 
 if [ ! -z "${TF_POPLAR_BASE}" ] && [ ! -z "${TF_POPLAR_SANDBOX}" ]; then
   echo "ERROR: Both TF_POPLAR_BASE and TF_POPLAR_SANDBOX are set, please unset one"
@@ -171,6 +175,10 @@ pip3 install --upgrade setuptools wheel
 
 # Install supplied tensorflow wheel.
 pip3 install --force-reinstall ${TENSORFLOW_WHEEL_PATH}
+# Remove Keras
+pip3 uninstall -y keras
+# Install supplied keras wheel.
+pip3 install --force-reinstall ${KERAS_WHEEL_PATH}
 
 # Create user config.
 if [ "$USER_BAZELRC" = true ]; then
