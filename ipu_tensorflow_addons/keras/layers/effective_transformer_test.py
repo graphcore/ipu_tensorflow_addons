@@ -240,7 +240,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
       # Build an Effective Transformer.
       transformer = EffectiveTransformer(**transformer_kwargs)
 
-      @tf.function(experimental_compile=True)
+      @tf.function(jit_compile=True)
       def f(inputs):
         return transformer(inputs)
 
@@ -366,7 +366,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
       transformer = EffectiveTransformer(**transformer_kwargs)
       opt = keras.optimizers.SGD(learning_rate=0.01)
 
-      @tf.function(experimental_compile=True)
+      @tf.function(jit_compile=True)
       def f(inputs, targets):
         with tf.GradientTape() as tape:
           y = transformer(inputs)[0]
@@ -521,7 +521,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
 
       num_sequences = len(sequence_lengths)
 
-      @tf.function(experimental_compile=True)
+      @tf.function(jit_compile=True)
       def f():
         transformer = EffectiveTransformer(12, 10)
         # pylint: disable=protected-access
