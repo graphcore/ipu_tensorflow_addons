@@ -152,3 +152,13 @@ py_test(
         ":saved_model_tool",
     ],
 )
+
+py_test(
+    name = "utils_test",
+    srcs = [
+        "converter/utils_test.py",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)

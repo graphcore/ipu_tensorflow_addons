@@ -14,6 +14,7 @@
 # ==============================================================================
 import os
 from uuid import uuid4
+from collections import OrderedDict
 
 import numpy as np
 from tensorflow import as_dtype
@@ -25,6 +26,7 @@ from tensorflow.python.data.ops.dataset_ops import Dataset
 from tensorflow.python.framework import importer
 from tensorflow.core.framework import attr_value_pb2, graph_pb2
 from tensorflow.python.ops import array_ops, math_ops
+from tensorflow.python.ipu import ipu_infeed_queue, ipu_outfeed_queue
 
 FLOAT_TYPE_LIST = [
     types_pb2.DT_HALF,
@@ -264,10 +266,9 @@ def prepare_dataset(inputs_shape_and_dtype, batch_size=0):
         for name, shape, dtype in inputs_shape_and_dtype
     ]
   dataset = Dataset.from_tensors(
-      tuple([
+      tuple(
           np.random.randint(10, size=shape).astype(tf_type_to_numpy(dtype))
-          for _, shape, dtype in inputs_shape_and_dtype_for_dataset
-      ]))
+          for _, shape, dtype in inputs_shape_and_dtype_for_dataset))
   dataset = dataset.repeat()
   if batch_size:
     dataset = dataset.batch(batch_size=batch_size, drop_remainder=True)
@@ -435,3 +436,57 @@ def should_do_embedded_runtime(embedded_runtime_save_config, batch_per_step,
   if not int64_to_int32_conversion:
     return False
   return True
+
+
+def validate_pipeline_cfg(param, kwargs: OrderedDict, behavior: str):
+  if "converter" not in param.pipeline_cfg:
+    raise ValueError("`pipeline_cfg` must contain `behavior` keywords.")
+
+  if param.pipeline_cfg["converter"].lower() == behavior:
+    for key in param.pipeline_cfg:
+      if key not in kwargs:
+        raise ValueError(
+            f"Unkown keyword {key} in `pipeline_cfg` in {behavior} converter.")
+
+  return tuple(param.pipeline_cfg.get(kw, kwargs[kw]) for kw in kwargs)
+
+
+def pipeline_embedded_runtime_wrapper(param, ipu_cfg, autograph_tfv1graph,
+                                      signature, batch_size, batch_per_step,
+                                      poplar_exec_filepath,
+                                      runtime_api_timeout_us):
+  extract_ipu_config_from_param(param, ipu_cfg)
+  ipu_cfg.configure_ipu_system()
+
+  computational_stages, device_mapping = autograph_tfv1graph.pipelined()
+
+  with ops.Graph().as_default():
+    inputs_shape_and_dtype = input_placeholder_name_shape_dtype(
+        autograph_tfv1graph.graph, signature)
+    outputs_shape_and_dtype = output_placeholder_name_shape_dtype(
+        autograph_tfv1graph.graph, signature)
+
+    dataset = prepare_dataset(inputs_shape_and_dtype, batch_size=batch_size)
+
+    infeed_queue = ipu_infeed_queue.IPUInfeedQueue(dataset)
+    outfeed_queue = ipu_outfeed_queue.IPUOutfeedQueue()
+
+    gradient_accumulation_count = batch_per_step * len(computational_stages)
+
+    def compile_func():
+      pipeline_op = ipu.pipelining_ops.pipeline(
+          computational_stages=computational_stages,
+          device_mapping=device_mapping,
+          gradient_accumulation_count=gradient_accumulation_count,
+          repeat_count=1,
+          inputs=[],
+          infeed_queue=infeed_queue,
+          outfeed_queue=outfeed_queue,
+          name='pipeline_op')
+      return pipeline_op
+
+  return embedded_application_runtime_save(signature, inputs_shape_and_dtype,
+                                           outputs_shape_and_dtype,
+                                           poplar_exec_filepath,
+                                           runtime_api_timeout_us,
+                                           compile_func, batch_size)
