@@ -64,6 +64,17 @@ py_test(
 )
 
 py_test(
+    name = "tfv1experiment_test",
+    srcs = [
+        "converter/autograph/tfv1experiment_test.py",
+        "saved_model_test_utils.py",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
     name = "ipu_placement_test",
     srcs = [
         "converter/ipu_placement_test.py",
