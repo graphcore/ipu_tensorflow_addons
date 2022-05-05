@@ -147,71 +147,15 @@ echo "Using ${PYTHON_BIN_PATH}"
 
 VE="${VENV_PATH:-$DEFAULT_VENV_PATH}"
 
-if [ -d "${VE}" ]; then
-  echo "Re-using existing ${VE} virtual environment"
-else
-  echo "Creating Python virtual environment in ${VE}"
-  # Set up an independent python virtualenv.
-  USE_VIRTUALENV=1
-  rm -rf ${VE}
-  ${PYTHON_BIN_PATH} -m venv ${VE} --without-pip
+CONFIG_ARGS=("--venv-path" "${VE}" "--tf-whl-path" "$(realpath $TENSORFLOW_WHEEL_PATH)" "--keras-whl-path" "$(realpath $KERAS_WHEEL_PATH)")
+if [ -n "${TMPDIR+set}" ]; then
+  CONFIG_ARGS+=("--env","TMPDIR=${TMPDIR}")
+fi
+if [ -n "${ENV_VARS+set}" ]; then
+  CONFIG_ARGS+=("--env","${ENV_VARS}")
+fi
+if [ -n "${BAZEL_CACHE_DIR+set}" ]; then
+  CONFIG_ARGS+=("--disk-cache" "${BAZEL_CACHE_DIR}")
 fi
 
-# Activate the venv.
-# It's important that we're still in the venv later when we create .bazelrc.user
-source ${VE}/bin/activate
-
-# Install the latest pip.
-if python3 --version 2>&1 | grep -q '^Python 3\.6'; then
-  wget -O get-pip.py https://bootstrap.pypa.io/pip/3.6/get-pip.py
-else
-  wget -O get-pip.py https://bootstrap.pypa.io/pip/get-pip.py
-fi
-python3 get-pip.py
-rm -f get-pip.py
-
-# Install latest setuptools.
-pip3 install --upgrade setuptools wheel
-
-# Install supplied tensorflow wheel.
-pip3 install --force-reinstall ${TENSORFLOW_WHEEL_PATH}
-# Remove Keras
-pip3 uninstall -y keras
-# Install supplied keras wheel.
-pip3 install --force-reinstall ${KERAS_WHEEL_PATH}
-
-# Create user config.
-if [ "$USER_BAZELRC" = true ]; then
-  tmp_backup=$(mktemp)
-  # Backup current user config if it exists.
-  if [ -f ".bazelrc.user" ]; then
-    mv .bazelrc.user $tmp_backup
-  fi
-
-  # Paths pointing to venv, Poplar, and TensorFlow.
-  echo "build --test_env=PATH=${PATH}" >>.bazelrc.user
-  echo "build --test_env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >>.bazelrc.user
-  echo "build --test_env=PYTHONPATH=${PYTHONPATH}" >>.bazelrc.user
-
-  if [ -n "${TMPDIR+set}" ]; then
-    echo "build --action_env=TMPDIR=${TMPDIR}" >>.bazelrc.user
-  fi
-  if [ -n "${ENV_VARS+set}" ]; then
-    for v in $(echo $ENV_VARS | tr "," "\n"); do
-      echo "build --action_env=$v=${!v}" >>.bazelrc.user
-    done
-  fi
-
-  if [ -n "${BAZEL_CACHE_DIR+set}" ]; then
-    echo "build --disk_cache=${BAZEL_CACHE_DIR}" >>.bazelrc.user
-  fi
-
-  # Restore the user defined options.
-  separation="### ADD USER DEFINED OPTIONS AFTER THIS LINE ONLY ###"
-  echo $separation >>.bazelrc.user
-  if [ -f "$tmp_backup" ]; then
-    sed "0,/$separation/d" $tmp_backup >>.bazelrc.user
-    rm $tmp_backup
-  fi
-  echo "Successfully created .bazelrc.user"
-fi
+python3 ${DIR}/configure.py ${CONFIG_ARGS[@]}
