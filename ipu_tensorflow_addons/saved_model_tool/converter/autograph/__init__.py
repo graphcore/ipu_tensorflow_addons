@@ -17,3 +17,4 @@ from ipu_tensorflow_addons.saved_model_tool.converter.autograph.tfv1graph import
 from ipu_tensorflow_addons.saved_model_tool.converter.autograph.options import RunConfig
 from ipu_tensorflow_addons.saved_model_tool.converter.autograph.profile import ProfileAnalyzer
 from ipu_tensorflow_addons.saved_model_tool.converter.autograph.tfv1experiment import TFv1Experiment, Experiment
+from ipu_tensorflow_addons.saved_model_tool.converter.autograph.strategies import ManualPipelineStrategy, GreedySolveStrategy

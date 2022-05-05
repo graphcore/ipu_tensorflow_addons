@@ -86,6 +86,7 @@ def convert_with_ipu(args):
       manual_sharding=args.manual_sharding,
       config_file=args.config_file,
       precision_mode=args.precision_mode,
+      pipeline_cfg=args.pipeline_cfg,
       embedded_runtime_save_config=args.embedded_runtime_save_config)
 
 
@@ -262,7 +263,73 @@ def create_parser():
                 "embedded_runtime_exec_cachedir": "/path/to/exec",
                 "runtime_api_timeout_us": 5000
             }"""))
-
+  parser_convert_with_ipu.add_argument(
+      '--pipeline_cfg',
+      type=json_dict,
+      default=None,
+      help=('The configuration of pipeline related converters, '
+            'a JSON like string for auto pipeline configuration e.g.\n' + textwrap.dedent("""\
+            {
+                "converter": "auto",
+                "fine_tune_iter": 5,
+                "ipu_model": True,
+                "max_ipu_quantity": 64,
+                "min_ipu_quantity": 2,
+                "priority": "cycle",
+                "profiling_root_dir": "profiling",
+                "solution_dir": "solution"
+            }""") + '\n' + \
+            'a JSON like string for manual pipeline configuration e.g.\n' + textwrap.dedent("""\
+            {
+                "converter": "manual",
+                "ipu_model": True,
+                "profiling_root_dir": "profiling",
+                "solution_dir": "solution",
+                "regex": [
+                    [
+                      "Placeholder_2",
+                      "^middle/unit_0",
+                      "^middle/unit_1",
+                      "^middle/unit_2",
+                      "^middle/unit_3",
+                      "^middle/unit_4"
+                    ],
+                    [
+                      "^middle/unit_5",
+                      "Placeholder",
+                      "Placeholder_1",
+                      "^right/unit_0",
+                      "^right/unit_1",
+                      "^right/unit_2",
+                      "^left/unit_0"
+                    ],
+                    [
+                      "^left/unit_1",
+                      "^left/unit_2",
+                      "^left/unit_3",
+                      "^left/unit_4",
+                      "concat",
+                      "^res/unit_0"
+                    ],
+                    [
+                      "^res/unit_1",
+                      "^res/unit_2",
+                      "^res/down",
+                      "^res/add"
+                    ]
+                ],
+                "device_info": [0, 1, 1, 0],
+                "profiling_enable": true
+            }""") + '\n' + \
+            'a JSON like string for loading pipeline configuration e.g.\n' + textwrap.dedent("""\
+            {
+                "converter": "load",
+                "ipu_model": True,
+                "priority": "cycle",
+                "profiling_root_dir": "profiling",
+                "solution_path": "solution/greedy_search.pipeconfig",
+                "profiling_enable": true
+            }""")))
   parser_convert_with_ipu.add_argument('--config_file',
                                        type=str,
                                        default=None,

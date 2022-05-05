@@ -490,3 +490,16 @@ def pipeline_embedded_runtime_wrapper(param, ipu_cfg, autograph_tfv1graph,
                                            poplar_exec_filepath,
                                            runtime_api_timeout_us,
                                            compile_func, batch_size)
+
+
+def should_do_pipeline_wrapper(pipeline_cfg, behavior,
+                               embedded_runtime_save_config, batch_per_step,
+                               merge_subgraphs, int64_to_int32_conversion):
+  if not pipeline_cfg:
+    return False
+  if pipeline_cfg["converter"].lower() != behavior:
+    return False
+
+  return should_do_embedded_runtime(embedded_runtime_save_config,
+                                    batch_per_step, merge_subgraphs,
+                                    int64_to_int32_conversion)

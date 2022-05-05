@@ -81,6 +81,7 @@ class IpuConversionParams(object):
                precision_conversion_excluded_nodes=None,
                manual_sharding=None,
                int64_to_int32_conversion=False,
+               pipeline_cfg=None,
                embedded_runtime_save_config=None):
     self.excluded_nodes = excluded_nodes
     self.num_ipus = num_ipus
@@ -102,6 +103,7 @@ class IpuConversionParams(object):
 
     self.batch_size = batch_size
     self.embedded_runtime_save_config = embedded_runtime_save_config
+    self.pipeline_cfg = pipeline_cfg
 
   def load_from_json_file(self, config_file):
     if not os.access(config_file, os.R_OK):
@@ -177,6 +179,9 @@ class IpuConversionParams(object):
       self.embedded_runtime_save_config = config[
           "embedded_runtime_save_config"]
 
+    if "pipeline_cfg" in config and isinstance(config["pipeline_cfg"], dict):
+      self.pipeline_cfg = config["pipeline_cfg"]
+
   def save_to_json_file(self, directory):
     if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
       raise ValueError(
@@ -209,6 +214,9 @@ class IpuConversionParams(object):
     if self.embedded_runtime_save_config:
       config[
           "embedded_runtime_save_config"] = self.embedded_runtime_save_config
+
+    if self.pipeline_cfg:
+      config["pipeline_cfg"] = self.pipeline_cfg
 
     config_file_path = os.path.join(directory, 'conversion_params.json')
     with open(config_file_path, 'w') as fp:
@@ -490,6 +498,7 @@ def create_inference_graph(batch_size=1,
                            manual_sharding=None,
                            int64_to_int32_conversion=False,
                            embedded_runtime_save_config=None,
+                           pipeline_cfg=None,
                            config_file=None):
   # pylint:disable=line-too-long
   """Python wrapper for the IPU transformation.
@@ -539,6 +548,7 @@ def create_inference_graph(batch_size=1,
       precision_mode=precision_mode,
       manual_sharding=manual_sharding,
       int64_to_int32_conversion=int64_to_int32_conversion,
+      pipeline_cfg=pipeline_cfg,
       embedded_runtime_save_config=embedded_runtime_save_config)
 
   if config_file:

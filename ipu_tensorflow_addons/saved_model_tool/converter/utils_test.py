@@ -19,6 +19,7 @@
 Test cases for utils
 """
 import os
+import tempfile
 
 from tensorflow.core.framework import types_pb2
 from tensorflow.core.framework import node_def_pb2
@@ -197,18 +198,20 @@ class TestUtils(test_util.TensorFlowTestCase):
     self.assertIn("Cast", nodes_op_type)
 
   def test_extract_emb_setting_from_param(self):
+    poplar_exec_path = os.path.join(tempfile.mkdtemp(dir=test.get_temp_dir()),
+                                    "poplar_exec")
     params = IpuConversionParams(
         embedded_runtime_save_config={
-            "embedded_runtime_exec_cachedir": "poplar_exec",
+            "embedded_runtime_exec_cachedir": poplar_exec_path,
             "runtime_api_timeout_us": 1000
         })
     (embedded_runtime_exec_cachedir, poplar_exec_filepath,
      runtime_api_timeout_us,
      batch_per_step) = extract_emb_setting_from_param(params)
-    self.assertEqual(embedded_runtime_exec_cachedir, "poplar_exec")
+    self.assertEqual(embedded_runtime_exec_cachedir, poplar_exec_path)
     self.assertEqual(runtime_api_timeout_us, 1000)
     self.assertEqual(poplar_exec_filepath,
-                     os.path.join("poplar_exec", "application.poplar_exec"))
+                     os.path.join(poplar_exec_path, "application.poplar_exec"))
     self.assertEqual(batch_per_step, 1)
 
 

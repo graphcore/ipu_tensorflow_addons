@@ -43,6 +43,21 @@ py_test(
 )
 
 py_test(
+    name = "strategies_test",
+    srcs = [
+        "converter/autograph/profile_test.py",
+        "converter/autograph/strategies_test.py",
+        "saved_model_test_utils.py",
+    ],
+    data = [
+        ":profile_test_data",
+    ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
     name = "tfv1graph_test",
     srcs = [
         "converter/autograph/tfv1graph_test.py",
