@@ -1,2 +1,26 @@
-# Put user-specific options in .bazelrc.user
+# Need to set this to use build settings. See 
+# https://docs.bazel.build/versions/0.26.0/skylark/lib/globals.html#rule.
+common --experimental_build_setting_api
+
+# Useful configuration for running tests locally.
+test:poplar_common --cache_test_results=no
+test:poplar_common --flaky_test_attempts=1
+test:poplar_common --test_output=all
+test:poplar_common --test_size_filters=small,medium,large
+test:poplar_common --test_timeout=240,360,900,3600
+test:poplar_common --verbose_failures
+
+# Configuration to run tests on an IPU model.
+test:ipu_model --config=poplar_common
+test:ipu_model --test_env=TF_POPLAR_FLAGS='--use_ipu_model --max_compilation_threads=1 --max_infeed_threads=2'
+
+# Configuration to run tests on IPU hardware.
+test:hw --config=poplar_common
+test:hw --test_env=TF_IPU_COUNT='16'
+test:hw --test_env=TF_POPLAR_FLAGS='--max_compilation_threads=1 --max_infeed_threads=2'
+
+# Load rc file written by ./configure.py.
+try-import %workspace%/.addons_configure.bazelrc
+
+# Load rc file with user-specific options.
 try-import %workspace%/.bazelrc.user

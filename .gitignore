@@ -1,6 +1,7 @@
 .DS_Store
 .ipynb_checkpoints
 node_modules
+/.addons_configure.bazelrc
 /.bazelrc.user
 /bazel-*
 /bazel_pip
