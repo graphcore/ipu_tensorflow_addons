@@ -336,6 +336,29 @@ class LoopRepeatWrapperTestCase(test_util.TensorFlowTestCase):
     second_engine_name = find_app_call(graph_def_second)
     self.assertNotEqual(first_engine_name, second_engine_name)
 
+  def test_skip_with_pipeline_cfg(self):
+    converter = LoopRepeatWrapper(
+        IpuConversionParams(batch_size=1,
+                            excluded_nodes=["^sharding0"],
+                            remove_excluded_nodes=False,
+                            int64_to_int32_conversion=True,
+                            pipeline_cfg={
+                                "converter": "auto",
+                                "fine_tune_iter": 5,
+                                "ipu_model": True,
+                                "max_ipu_quantity": 64,
+                                "min_ipu_quantity": 2,
+                                "priority": "cycle",
+                                "profiling_root_dir": "profiling",
+                                "solution_dir": "solution"
+                            },
+                            embedded_runtime_save_config={
+                                "embedded_runtime_exec_cachedir":
+                                self.poplar_exec_path,
+                                "runtime_api_timeout_us": 5000
+                            }))
+    self.assertFalse(converter._should_do_loop_repeat_ipu_wrapper())  # pylint: disable=protected-access
+
 
 if __name__ == '__main__':
   test.main()

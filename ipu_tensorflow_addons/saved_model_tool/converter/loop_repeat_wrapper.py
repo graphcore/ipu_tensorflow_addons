@@ -58,6 +58,7 @@ class LoopRepeatWrapper(Converter):
     self._embedded_runtime_save_config = param.embedded_runtime_save_config
     self._merge_subgraphs = param.merge_subgraphs
     self._int64_to_int32_conversion = param.int64_to_int32_conversion
+    self._pipeline_cfg = param.pipeline_cfg
     self._validate_params(param)
 
     self.cfg = ipu.config.IPUConfig()
@@ -72,6 +73,8 @@ class LoopRepeatWrapper(Converter):
     utils.validate_embedded_runtime_save_config(param)
 
   def _should_do_loop_repeat_ipu_wrapper(self):
+    if self._pipeline_cfg:
+      return False
     return utils.should_do_embedded_runtime(self._embedded_runtime_save_config,
                                             self._batch_per_step,
                                             self._merge_subgraphs,
