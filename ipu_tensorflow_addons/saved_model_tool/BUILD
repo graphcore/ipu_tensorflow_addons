@@ -9,22 +9,11 @@ py_library(
     name = "saved_model_tool",
     srcs = [
         "__init__.py",
-        "converter/__init__.py",
-        "converter/converter.py",
-        "converter/converter_pipeline.py",
-        "converter/gelu_replacement.py",
-        "converter/int64_to_int32_conversion.py",
-        "converter/ipu_compiler_wrapper.py",
-        "converter/ipu_placement.py",
-        "converter/loop_repeat_wrapper.py",
-        "converter/manual_shard.py",
-        "converter/precision_conversion.py",
-        "converter/utils.py",
         "ipu_convert.py",
         "saved_model_cli.py",
     ] + glob(
-        ["converter/autograph/**/*.py"],
-        exclude = ["converter/autograph/**/*_test.py"],
+        ["converter/**/*.py"],
+        exclude = ["converter/**/*_test.py"],
     ),
 )
 
@@ -140,6 +129,18 @@ py_test(
         "converter/int64_to_int32_conversion_test.py",
         "saved_model_test_utils.py",
     ],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
+    name = "pipeconf_loader_test",
+    srcs = [
+        "converter/pipeconf_loader_test.py",
+        "saved_model_test_utils.py",
+    ],
+    tags = ["hw_poplar_test_2_ipus"],
     deps = [
         ":saved_model_tool",
     ],
