@@ -14,6 +14,7 @@
 # ==============================================================================
 
 import argparse
+import glob
 import os
 import shlex
 import shutil
@@ -46,6 +47,25 @@ def info(message):
 def exit_with_error(message, exit_code=1):
   error(message)
   sys.exit(exit_code)
+
+
+def expand_path_pattern(path, error_prefix=None):
+  """Convert `relative/path/*.whl` to `/absolute/path/package.whl`."""
+  path = path.absolute()
+  concrete_paths = glob.glob(str(path))
+
+  if len(concrete_paths) == 0:
+    msg = f"Couldn't find path with pattern '{path}'."
+    msg = msg if error_prefix is None else f"{error_prefix}\n{msg}"
+    return exit_with_error(msg)
+
+  if len(concrete_paths) > 1:
+    msg = "\n  ".join(concrete_paths)
+    msg = f"Path pattern '{path}' is ambiguous. Found:\n  {msg}"
+    msg = msg if error_prefix is None else f"{error_prefix}\n{msg}"
+    return exit_with_error(msg)
+
+  return Path(path)
 
 
 def run_cmd(cmd, env=None, verbose=True):
@@ -287,12 +307,12 @@ def argument_parser():
 
 
 def check_args(args):
-  if not os.path.exists(args.tf_whl_path):
-    exit_with_error(f"Specified TensorFlow wheel path does not exist: "
-                    f"{args.tf_whl_path}.")
-  if not os.path.exists(args.keras_whl_path):
-    exit_with_error(f"Specified Keras wheel path does not exist: "
-                    f"{args.keras_whl_path}.")
+  args.tf_whl_path = expand_path_pattern(
+      Path(args.tf_whl_path),
+      f"Specified TensorFlow wheel path does not exist: '{args.tf_whl_path}'.")
+  args.keras_whl_path = expand_path_pattern(
+      Path(args.keras_whl_path),
+      f"Specified Keras wheel path does not exist: '{args.keras_whl_path}'.")
   for entry in args.env:
     if entry.find("=") < 1:
       exit_with_error(
