@@ -65,7 +65,7 @@ def expand_path_pattern(path, error_prefix=None):
     msg = msg if error_prefix is None else f"{error_prefix}\n{msg}"
     return exit_with_error(msg)
 
-  return Path(path)
+  return Path(concrete_paths[0])
 
 
 def run_cmd(cmd, env=None, verbose=True):
