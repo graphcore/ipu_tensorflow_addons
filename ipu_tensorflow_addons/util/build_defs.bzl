@@ -45,12 +45,20 @@ def _py_dependency_versions_impl(ctx):
 
     ctx.actions.write(output = out, content = content)
 
-    return [DefaultInfo(files = depset([out]))]
+    return [
+        DefaultInfo(
+            files = depset([out]),
+            runfiles = ctx.runfiles(files = [out]),
+        ),
+        PyInfo(
+            transitive_sources = depset(direct = [out]),
+        ),
+    ]
 
 py_dependency_versions = rule(
     implementation = _py_dependency_versions_impl,
     attrs = {
-        "_tensorflow_version": attr.label(default = "//ipu_tensorflow_addons:tensorflow_version"),
-        "_keras_version": attr.label(default = "//ipu_tensorflow_addons:keras_version"),
+        "_tensorflow_version": attr.label(default = "//ipu_tensorflow_addons/util:tensorflow_version"),
+        "_keras_version": attr.label(default = "//ipu_tensorflow_addons/util:keras_version"),
     },
 )

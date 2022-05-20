@@ -253,8 +253,8 @@ def write_bazelrc(args, action_env, test_env):
   for k, v in test_env.items():
     rc(f"build --test_env={k}={v}")
   rc(f"build --python_path={get_python_bin(args)}")
-  rc(f"build --//ipu_tensorflow_addons:tensorflow_version={get_tf_version(args)}")  # pylint: disable=line-too-long
-  rc(f"build --//ipu_tensorflow_addons:keras_version={get_keras_version(args)}")
+  rc(f"build --//ipu_tensorflow_addons/util:tensorflow_version={get_tf_version(args)}")  # pylint: disable=line-too-long
+  rc(f"build --//ipu_tensorflow_addons/util:keras_version={get_keras_version(args)}")  # pylint: disable=line-too-long
   if args.disk_cache:
     rc(f"build --disk_cache={get_disk_cache_path(args)}")
   # yapf: enable
