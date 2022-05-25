@@ -24,6 +24,7 @@ from ipu_tensorflow_addons.saved_model_tool.converter import LoopRepeatWrapper
 from ipu_tensorflow_addons.saved_model_tool.converter import ManualPipeline
 from ipu_tensorflow_addons.saved_model_tool.converter import GeluReplacement
 from ipu_tensorflow_addons.saved_model_tool.converter import PipelineConfLoader
+from ipu_tensorflow_addons.saved_model_tool.converter import AutoPipeline
 
 
 class ConverterPipeline():
@@ -37,6 +38,7 @@ class ConverterPipeline():
     self._converters.append(ManualSharding(param))
     self._converters.append(IPUCompilerWrapper(param))
     self._converters.append(LoopRepeatWrapper(param))
+    self._converters.append(AutoPipeline(param))
     self._converters.append(ManualPipeline(param))
     self._converters.append(PipelineConfLoader(param))
 
