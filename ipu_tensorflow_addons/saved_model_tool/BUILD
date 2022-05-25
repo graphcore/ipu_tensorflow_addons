@@ -112,6 +112,18 @@ py_test(
 )
 
 py_test(
+    name = "manual_pipeline_test",
+    srcs = [
+        "converter/manual_pipeline_test.py",
+        "saved_model_test_utils.py",
+    ],
+    tags = ["hw_poplar_test_2_ipus"],
+    deps = [
+        ":saved_model_tool",
+    ],
+)
+
+py_test(
     name = "loop_repeat_wrapper_test",
     srcs = [
         "converter/loop_repeat_wrapper_test.py",

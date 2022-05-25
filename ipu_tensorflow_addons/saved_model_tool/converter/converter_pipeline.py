@@ -21,6 +21,7 @@ from ipu_tensorflow_addons.saved_model_tool.converter import IPUCompilerWrapper
 from ipu_tensorflow_addons.saved_model_tool.converter import ManualSharding
 from ipu_tensorflow_addons.saved_model_tool.converter import Int64Conversion
 from ipu_tensorflow_addons.saved_model_tool.converter import LoopRepeatWrapper
+from ipu_tensorflow_addons.saved_model_tool.converter import ManualPipeline
 from ipu_tensorflow_addons.saved_model_tool.converter import GeluReplacement
 from ipu_tensorflow_addons.saved_model_tool.converter import PipelineConfLoader
 
@@ -36,6 +37,7 @@ class ConverterPipeline():
     self._converters.append(ManualSharding(param))
     self._converters.append(IPUCompilerWrapper(param))
     self._converters.append(LoopRepeatWrapper(param))
+    self._converters.append(ManualPipeline(param))
     self._converters.append(PipelineConfLoader(param))
 
   def ApplyConverters(self, graph_def, signature_def):
