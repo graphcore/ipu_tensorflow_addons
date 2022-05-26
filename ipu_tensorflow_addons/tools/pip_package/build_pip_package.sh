@@ -19,12 +19,10 @@ DIR=$(realpath $(dirname $0))
 
 print_usage_and_exit() {
   cat <<EOM
-Usage: $0 output-directory tf-version [--help|-h]
+Usage: $0 output-directory [--help|-h]
 
   output-directory
       The directory to place the wheel file in. The current working directory is used by default.
-  tf-version
-      The TensorFlow version the wheel is being built for.
   -h, --help
       Print this help message.
 EOM
@@ -38,7 +36,8 @@ if echo $@ | grep -w -- "-h\|--help" > /dev/null
 fi
 
 # Check argument count
-if [ $# -ne 2 ]
+# TODO: Remove case for 2 args after the view script has been updated to pass 1 arg.
+if [ $# -ne 1 ] && [ $# -ne 2 ]
   then
     echo "ERROR: Incorrect number of arguments"
     print_usage_and_exit
@@ -49,9 +48,6 @@ if [ ! -d ${OUTPUT_DIRECTORY} ]; then
   echo "ERROR: Specified output directory could not be found: ${OUTPUT_DIRECTORY}"
   exit 1
 fi
-shift
-
-export TF_VERSION=$1
 shift
 
 cleanup_temp_dir() {
@@ -79,9 +75,12 @@ else
   exit 1
 fi
 
+cp ipu_tensorflow_addons/tools/pip_package/setup.py ${TMP_DIR}
+cp ${TMP_DIR}/ipu_tensorflow_addons/util/_dependency_versions.py ${TMP_DIR}
+
 # Build wheel and copy it to specified output directory.
 cd "${TMP_DIR}"
-"${PYTHON_BIN_PATH:-python3}" "./ipu_tensorflow_addons/tools/pip_package/setup.py" bdist_wheel --dist-dir "${TMP_DIR}/" >/dev/null
+"${PYTHON_BIN_PATH:-python3}" setup.py bdist_wheel --dist-dir "${TMP_DIR}/" >/dev/null
 WHEEL_NAME=$(basename ipu_tensorflow_addons-*.whl)
 if [ ! -f ${WHEEL_NAME} ]; then
   echo "ERROR: Failed to locate wheel file: ${WHEEL_NAME}"
