@@ -36,8 +36,7 @@ if echo $@ | grep -w -- "-h\|--help" > /dev/null
 fi
 
 # Check argument count
-# TODO: Remove case for 2 args after the view script has been updated to pass 1 arg.
-if [ $# -ne 1 ] && [ $# -ne 2 ]
+if [ $# -ne 1 ]
   then
     echo "ERROR: Incorrect number of arguments"
     print_usage_and_exit
