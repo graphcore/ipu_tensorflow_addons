@@ -265,19 +265,19 @@ def write_bazelrc(args, action_env, test_env):
     f.writelines([line + "\n" for line in bazel_rc])
 
 
-def argument_parser():
+def argument_parser(tf_whl_path_default=None, keras_whl_path_default=None):
   parser = argparse.ArgumentParser(
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument(
       '--tf-whl-path',
-      default=None,
-      required=True,
+      default=tf_whl_path_default,
+      required=tf_whl_path_default is None,
       help="The path to the IPU TensorFlow .whl file you want to build the "
       "Addons for.")
   parser.add_argument(
       '--keras-whl-path',
-      default=None,
-      required=True,
+      default=keras_whl_path_default,
+      required=keras_whl_path_default is None,
       help="The path to the IPU Keras .whl file you want to build the Addons "
       "for.")
   parser.add_argument(
