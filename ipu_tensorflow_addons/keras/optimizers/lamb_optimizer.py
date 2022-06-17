@@ -165,14 +165,14 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
       cast_v = tf.cast(v, dtype=compute_dtype)
 
       # Update biased first moment estimate
-      # m_t = beta1 * m_t-1 + (1 - beta1) * g_t
-      next_m = (tf.multiply(beta_1_t, cast_m) +
-                tf.multiply(1.0 - beta_1_t, cast_grad))
+      # m_t = m_t-1 * beta1 + g_t * (1 - beta1)
+      next_m = (tf.multiply(cast_m, beta_1_t) +
+                tf.multiply(cast_grad, 1.0 - beta_1_t))
 
       # Update biased second raw moment estimate
-      # v_t = beta2 * v_t-1 + (1 - beta2) * g_t^2
-      next_v = (tf.multiply(beta_2_t, cast_v) +
-                tf.multiply(1.0 - beta_2_t, tf.square(cast_grad)))
+      # v_t = v_t-1 * beta2 + g_t^2 * (1 - beta2)
+      next_v = (tf.multiply(cast_v, beta_2_t) +
+                tf.multiply(tf.square(cast_grad), 1.0 - beta_2_t))
 
       next_m_cast = tf.cast(next_m, dtype=m_dtype)
       next_v_cast = tf.cast(next_v, dtype=v_dtype)
