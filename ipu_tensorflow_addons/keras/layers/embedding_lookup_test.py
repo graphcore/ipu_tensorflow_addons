@@ -27,7 +27,11 @@ from ipu_tensorflow_addons.keras import layers
 dataType = np.float32
 
 
-def kerasIPUEmbeddingLookup(params, ids, name=None, serialization_factor=1):
+def kerasIPUEmbeddingLookup(params,
+                            ids,
+                            indices_are_sorted=False,
+                            name=None,
+                            serialization_factor=1):
   input_dim = params.shape[0]
   output_dim = params.shape[1]
   layer = layers.Embedding(
@@ -39,13 +43,14 @@ def kerasIPUEmbeddingLookup(params, ids, name=None, serialization_factor=1):
   layer.build(input_shape=ids.shape)
 
   @tf.function
-  def impl(ids):
-    return layer(inputs=ids)
+  def impl(ids, inputs_are_sorted):
+    return layer(inputs=ids, inputs_are_sorted=inputs_are_sorted)
 
-  return impl(ids)
+  return impl(ids, indices_are_sorted)
 
 
 class IPUEmbeddingLookupTest(test.TestCase):
+
   def testEmbeddingLookup(self):
     ids = tf.constant([[1, 2, 3]])
     paras = np.array([[10], [20], [80], [40]])
@@ -83,6 +88,16 @@ class IPUEmbeddingLookupTest(test.TestCase):
                                              ids,
                                              name="emb_test_5",
                                              serialization_factor=4)
+    self.assertAllClose(emb_lookup_tf, emb_lookup_ipu)
+
+  def testEmbeddingLookupSortedIds(self):
+    ids = tf.constant([[1, 2, 3]])
+    paras = np.array([[10], [20], [80], [40]])
+    emb_lookup_tf = tf.nn.embedding_lookup(paras, ids)
+    emb_lookup_ipu = kerasIPUEmbeddingLookup(paras,
+                                             ids,
+                                             indices_are_sorted=True,
+                                             name="emb_test_6")
     self.assertAllClose(emb_lookup_tf, emb_lookup_ipu)
 
   @test_util.run_v2_only

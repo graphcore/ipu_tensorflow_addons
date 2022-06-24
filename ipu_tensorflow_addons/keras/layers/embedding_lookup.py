@@ -91,12 +91,15 @@ class Embedding(ipu_layer.IPULayer):
     self.built = True
 
   # pylint: disable=arguments-differ
-  def call(self, inputs, training=None):
+  def call(self, inputs, inputs_are_sorted=False, training=None):
     """
     Perform an embedding lookup.
 
     Args:
         inputs: An integer tensor of indices into the embedding variable.
+        inputs_are_sorted: Set to True when indices are sorted, this allows
+          Poplar to optimise for the case when the indices to look up are in
+          order. Defaults to False.
 
     Returns:
         The entries of the embedding tensor corresponding to the ids tensor
@@ -106,6 +109,7 @@ class Embedding(ipu_layer.IPULayer):
     return embedding_ops.embedding_lookup(
         self.embeddings,
         ids=inputs,
+        indices_are_sorted=inputs_are_sorted,
         name=self.name,
         serialization_factor=self.serialization_factor)
 
