@@ -5,7 +5,7 @@ This document explains how to build a wheel file, and how to run tests.
 ## Prerequisites
 Bazel 3.7.2 is required for building wheel files and running tests.
 
-For running the tests, you will need a wheel file for a compatible version of IPU TensorFlow, and a
+For running the tests, you will need a wheel file for a compatible version of IPU TensorFlow, IPU Keras, and a
 matching Poplar installation (from the same Poplar SDK).
 
 ## TL;DR
@@ -20,7 +20,7 @@ bazel run //ipu_tensorflow_addons/tools/pip_package:build_pip_package <absolute-
 
 # Configure:
 export TF_POPLAR_BASE=<absolute-path-to-poplar-install>
-bash ./configure <path-to-tf-wheel>
+bash ./configure <path-to-tf-wheel> <path-to-keras-wheel>
 
 # Run all non-HW tests:
 bazel test //ipu_tensorflow_addons:all_tests --test_env=TF_POPLAR_FLAGS="--max_infeed_threads=8 --use_ipu_model --max_compilation_threads=1 --ipu_model_tiles=8" --test_env=TF_POPLAR_VLOG_LEVEL=1 --test_size_filters=small,medium,large --test_timeout="240,360,900,3600" --test_output=errors
@@ -58,8 +58,8 @@ bash bazel-bin/ipu_tensorflow_addons/tools/pip_package/build_pip_package <args>
 ## Configuring
 If you want to run tests, you will first need to run the `configure` script found in the root of the
 repository. This creates a `.bazelrc.user` which specifies bazel configuration options required to
-run the tests. One thing this does is set up the test environment so that TensorFlow and Poplar are
-available.
+run the tests. One thing this does is set up the test environment so that TensorFlow, Keras and Poplar
+are available.
 
 Before running the script you need to set `TF_POPLAR_BASE` to the absolute path to your Poplar
 installation. The script also requires positional arguments. Call `bash configure --help` for more
@@ -68,7 +68,7 @@ information.
 ```
 lang=sh
 export TF_POPLAR_BASE=<absolute-path-to-poplar-install>
-bash ./configure <path-to-tf-wheel>
+bash ./configure <path-to-tf-wheel> <path-to-keras-wheel>
 ```
 
 After calling the configure script, you can add customisations to the `.bazelrc.user` file.
