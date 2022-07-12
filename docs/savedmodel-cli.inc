@@ -1,12 +1,12 @@
 IPU SavedModel CLI
-^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 The IPU TensorFlow Addons includes a preview of the SavedModel command line
 interface (CLI) tool for IPUs called ``ipu_saved_model_cli``.
 
 .. note:: This tool is still in development and subject to change without notice. Not all functions will have been fully tested.
 
-This section documents the IPU-specific functions of the SavedModel CLI for the `run` and `convert` subcommands.
+This section documents the IPU-specific functions of the SavedModel CLI for the :ref:`run <run-command>` and :ref:`convert <convert-command>` subcommands.
 
 For more information about the tool, see the `TensorFlow SavedModel CLI documentation
 <https://www.tensorflow.org/guide/saved_model#details_of_the_savedmodel_command_line_interface>`__.
@@ -40,7 +40,7 @@ The ``run`` subcommand supports the following IPU-specific command line options:
 
 :samp:`--conv_amp {float}`
   The "available memory proportion": the proportion of memory to use for temporary values, intermediate sums and so on for convolutions. It must be a value between 0.0 and 1.0.
-  If you want to change this value, you will need to specify it to the ``run`` command, even if you have already specified it for the ``convert`` command unless you are using the  embedded application runtime (:numref:`convert-command`).
+  If you want to change this value, you will need to specify it to the ``run`` command, even if you have already specified it for the ``convert`` command unless you are using the  embedded application runtime (see :ref:`convert-command`).
 
   See :py:attr:`convolutions.poplar_options <tensorflow.python.ipu.config.IPUConfig.convolutions.poplar_options>` for more information.
 
@@ -50,7 +50,7 @@ The ``run`` subcommand supports the following IPU-specific command line options:
 
 :samp:`--conv_partial_type {string}`
   The type to use for intermediate values when doing a convolution. This can be "float" (the default) or "half".
-  If you want to change this type, you will need to specify it to the ``run`` command, even if you have already specified it for the ``convert`` command unless you are using the  embedded application runtime (:numref:`convert-command`).
+  If you want to change this type, you will need to specify it to the ``run`` command, even if you have already specified it for the ``convert`` command unless you are using the  embedded application runtime (see :ref:`convert-command`).
 
   See the :ref:`Memory and Performance Optimisation on the IPU <memory-performance-optimisation:partials type>` technical notes for some practical tips on selecting the type for partial results.
 
