@@ -34,6 +34,7 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
   optimizer update, which can save memory at the expense of passing variables
   around by making the optimizer update a reusable code block.
   """
+
   def __init__(
       self,
       learning_rate=0.001,
@@ -87,7 +88,9 @@ class LAMBIpuOptimizer(IpuOptimizerBase):
         decay of learning rate. `lr` is included for backward
         compatibility, recommended to use `learning_rate` instead.
     """
-    super().__init__(name, **kwargs)
+    super().__init__(name,
+                     optimizer_compute_precisions=optimizer_compute_precisions,
+                     **kwargs)
     self._set_hyper("weight_decay_rate", weight_decay_rate)
     self._set_hyper("learning_rate", kwargs.get("lr", learning_rate))
     self._set_hyper("decay", self._initial_decay)
