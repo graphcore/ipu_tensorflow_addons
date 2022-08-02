@@ -349,41 +349,6 @@ class LstmTrainingTest(test_util.TensorFlowTestCase, parameterized.TestCase):
     self.assertGreater(_total_tile_memory(reports[0]),
                        _total_tile_memory(reports[1]))
 
-  # TODO(T54285): Delete this test.
-  def testLstmOptionsWithAmp(self):
-    layer = layers.PopnnLSTM(2, available_memory_proportion_fwd=0.1)
-    self.assertTrue(
-        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
-    self.assertTrue(
-        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
-
-    layer = layers.PopnnLSTM(2,
-                             available_memory_proportion_fwd=0.1,
-                             available_memory_proportion_bwd=0.2)
-    self.assertTrue(
-        layer._options_with_amp['availableMemoryProportion'] == 0.1)  # pylint: disable=protected-access
-    self.assertTrue(
-        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
-
-    layer = layers.PopnnLSTM(2,
-                             available_memory_proportion_fwd=0.1,
-                             available_memory_proportion_bwd=0.2,
-                             options={'availableMemoryProportion': 0.3})
-    self.assertTrue(
-        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
-    self.assertTrue(
-        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.2)  # pylint: disable=protected-access
-
-    layer = layers.PopnnLSTM(2,
-                             available_memory_proportion_fwd=0.1,
-                             available_memory_proportion_bwd=0.2,
-                             options={'availableMemoryProportion': 0.3},
-                             options_bwd={'availableMemoryProportion': 0.4})
-    self.assertTrue(
-        layer._options_with_amp['availableMemoryProportion'] == 0.3)  # pylint: disable=protected-access
-    self.assertTrue(
-        layer._options_bwd_with_amp['availableMemoryProportion'] == 0.4)  # pylint: disable=protected-access
-
 
 if __name__ == "__main__":
   googletest.main()

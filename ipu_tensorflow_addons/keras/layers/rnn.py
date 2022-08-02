@@ -54,15 +54,7 @@ _LSTMStateTuple = collections.namedtuple("LSTMStateTuple", ("c", "h"))
 class _PopnnRNN(ipu_layer.IPULayer):
   """Base class for implementing XLA and Popnn compatible RNN layers.
   """
-  # TODO(T54285): Remove deprecation warning.
-  @deprecation.deprecated_args(
-      None,
-      'Please use `options={\'availableMemoryProportion\': <value>}` instead',
-      'available_memory_proportion_fwd')
-  @deprecation.deprecated_args(
-      None,
-      ('Please use `options_bwd={\'availableMemoryProportion\': <value>}` '
-       'instead'), 'available_memory_proportion_bwd')
+
   def __init__(self,
                num_units,
                activation='tanh',
@@ -78,12 +70,10 @@ class _PopnnRNN(ipu_layer.IPULayer):
                return_sequences=False,
                time_major=False,
                stateful=False,
-               available_memory_proportion_fwd=None,
-               available_memory_proportion_bwd=None,
                options=None,
                options_bwd=None,
                **kwargs):
-    super(_PopnnRNN, self).__init__(**kwargs)
+    super().__init__(**kwargs)
 
     activation = op_util.get_activation_name(activation)
     recurrent_activation = op_util.get_activation_name(recurrent_activation)
@@ -105,9 +95,6 @@ class _PopnnRNN(ipu_layer.IPULayer):
                        self._plain_dtype)
     # Layer self.dtype is type name, the original DType object is kept here.
 
-    if available_memory_proportion_bwd is None:
-      available_memory_proportion_bwd = available_memory_proportion_fwd
-
     self._activation = activation
     self._recurrent_activation = recurrent_activation
     self._partials_dtype = partials_dtype
@@ -119,29 +106,8 @@ class _PopnnRNN(ipu_layer.IPULayer):
     self._return_sequences = return_sequences
     self._time_major = time_major
     self._stateful = stateful
-    self._available_memory_proportion_fwd = available_memory_proportion_fwd
-    self._available_memory_proportion_bwd = available_memory_proportion_bwd
     self._options = dict() if options is None else options
     self._options_bwd = dict() if options_bwd is None else options_bwd
-
-    if all((available_memory_proportion_fwd not in {-1, None},
-            'availableMemoryProportion' in self._options)):
-      logging.warning((
-          f"Both, `available_memory_proportion_fwd="
-          f"{available_memory_proportion_fwd}` and "
-          f"`options['availableMemoryProportion']="
-          f"{self._options['availableMemoryProportion']}` are set. The value "
-          f"in `options` will be used. Unset `available_memory_proportion_fwd`"
-          f" to silence this warning."))
-    if all((available_memory_proportion_bwd not in {-1, None},
-            'availableMemoryProportion' in self._options_bwd)):
-      logging.warning(
-          (f"Both, `available_memory_proportion_bwd="
-           f"{available_memory_proportion_bwd}` and "
-           f"`options_bwd['availableMemoryProportion']="
-           f"{self._options_bwd['availableMemoryProportion']}` are set. The "
-           f"value in `options_bwd` will be used. Unset "
-           f"`available_memory_proportion_bwd` to silence this warning."))
 
     # Create the initializers.
     if kernel_initializer is None:
@@ -294,40 +260,6 @@ class _PopnnRNN(ipu_layer.IPULayer):
   def _extract_final_state(self, outputs):
     return outputs[-1, :, :]
 
-  @property
-  def _options_with_amp(self):
-    # TODO(T54285): Delete this whole function (property) and replace all calls
-    # with self._options.
-    available_memory_proportion_fwd = -1. \
-        if self._available_memory_proportion_fwd is None \
-        else self._available_memory_proportion_fwd
-
-    # Add `available_memory_proportion_fwd` value to the `options` dict if it's
-    # valid, and hasn't been set in the dict already.
-    options = dict(self._options)
-    if all((available_memory_proportion_fwd != -1,
-            'availableMemoryProportion' not in options)):
-      options['availableMemoryProportion'] = available_memory_proportion_fwd
-
-    return options
-
-  @property
-  def _options_bwd_with_amp(self):
-    # TODO(T54285): Delete this whole function (property) and replace all calls
-    # with self._options_bwd.
-    available_memory_proportion_bwd = -1. \
-        if self._available_memory_proportion_bwd is None \
-        else self._available_memory_proportion_bwd
-
-    # Add `available_memory_proportion_bwd` value to the `options_bwd` dict if
-    # it's valid, and hasn't been set in the dict already.
-    options_bwd = dict(self._options_bwd)
-    if all((available_memory_proportion_bwd != -1,
-            'availableMemoryProportion' not in options_bwd)):
-      options_bwd[
-          'availableMemoryProportion'] = available_memory_proportion_bwd
-    return options_bwd
-
 
 class PopnnLSTM(_PopnnRNN):
   # pylint:disable=line-too-long
@@ -416,21 +348,6 @@ class PopnnLSTM(_PopnnRNN):
       RNN calculation. However, most TensorFlow data is batch-major, so by
       default this function accepts input and emits output in batch-major
       form.
-    available_memory_proportion_fwd: Deprecated, please use
-      `options={'availableMemoryProportion': <value>}` instead. Maximum fraction
-      of IPU memory which can be used as temporary scratch space during
-      computation, for the forward propagation layer. A value of -1. or None
-      indicates that the default in Popnn should be used. If
-      available_memory_proportion_bwd is set to None, then this value applies to
-      both phases. Note that the value in `options['availableMemoryProportion']`
-      will be used if set together with this argument.
-    available_memory_proportion_bwd: Deprecated, please use
-      `options_bwd={'availableMemoryProportion': <value>}` instead. Maximum
-      fraction of IPU memory which can be used as temporary scratch space during
-      computation, for the backward propagation layer. A value of -1. or None
-      indicates that the default in Popnn should be used. Note that the value in
-      `options_bwd['availableMemoryProportion']` will be used if set together
-      with this argument.
     options: A Python dictionary.
       Implementation or debug options for the forward LSTM cell in PopLibs. See
       the LSTM documentation in the PopLibs API reference for the full list of
@@ -473,9 +390,6 @@ class PopnnLSTM(_PopnnRNN):
       partials_dtype=tf.float32,
       seed=None,
       time_major=False,
-      # TODO(T54285): Remove `available_memory_proportion_[b|f]wd`.
-      available_memory_proportion_fwd=None,
-      available_memory_proportion_bwd=None,
       options=None,
       options_bwd=None,
       **kwargs):
@@ -530,26 +444,23 @@ class PopnnLSTM(_PopnnRNN):
     if unroll:
       raise ValueError("IPU custom LSTM layer does not support unroll = True.")
 
-    super(PopnnLSTM, self).__init__(
-        num_units=units,
-        activation=activation,
-        recurrent_activation=recurrent_activation,
-        partials_dtype=partials_dtype,
-        seed=seed,
-        kernel_initializer=kernel_initializer,
-        recurrent_initializer=recurrent_initializer,
-        bias_initializer=bias_initializer,
-        dropout=dropout,
-        dropout_seed=dropout_seed,
-        return_state=return_state,
-        return_sequences=return_sequences,
-        time_major=time_major,
-        stateful=stateful,
-        available_memory_proportion_fwd=available_memory_proportion_fwd,
-        available_memory_proportion_bwd=available_memory_proportion_bwd,
-        options=options,
-        options_bwd=options_bwd,
-        **kwargs)
+    super().__init__(num_units=units,
+                     activation=activation,
+                     recurrent_activation=recurrent_activation,
+                     partials_dtype=partials_dtype,
+                     seed=seed,
+                     kernel_initializer=kernel_initializer,
+                     recurrent_initializer=recurrent_initializer,
+                     bias_initializer=bias_initializer,
+                     dropout=dropout,
+                     dropout_seed=dropout_seed,
+                     return_state=return_state,
+                     return_sequences=return_sequences,
+                     time_major=time_major,
+                     stateful=stateful,
+                     options=options,
+                     options_bwd=options_bwd,
+                     **kwargs)
     self.unit_forget_bias = unit_forget_bias
 
   def build(self, input_shape):
@@ -651,15 +562,8 @@ class PopnnLSTM(_PopnnRNN):
     bias_tensor = tf.reshape(self.biases,
                              [self._num_gates_per_layer, self._num_units])
 
-    available_memory_proportion_fwd = -1. \
-        if self._available_memory_proportion_fwd is None \
-        else self._available_memory_proportion_fwd
-    available_memory_proportion_bwd = -1. \
-        if self._available_memory_proportion_bwd is None \
-        else self._available_memory_proportion_bwd
-
-    options = json.dumps(self._options_with_amp)
-    options_bwd = json.dumps(self._options_bwd_with_amp)
+    options = json.dumps(dict(self._options))
+    options_bwd = json.dumps(dict(self._options_bwd))
 
     output, output_c, _ = gen_popnn_ops.popnn_lstm_layer(
         inputs=inputs,
@@ -845,21 +749,6 @@ class PopnnGRU(_PopnnRNN):
     reset_after:  GRU convention (whether to apply reset gate
       after or before matrix multiplication). False = "before",
       True = "after" (default).
-    available_memory_proportion_fwd: Deprecated, please use
-      `options={'availableMemoryProportion': <value>}` instead. Maximum fraction
-      of IPU memory which can be used as temporary scratch space during
-      computation, for the forward propagation layer. A value of -1. or None
-      indicates that the default in Popnn should be used. If
-      available_memory_proportion_bwd is set to None, then this value applies to
-      both phases. Note that the value in `options['availableMemoryProportion']`
-      will be used if set together with this argument.
-    available_memory_proportion_bwd: Deprecated, please use
-      `options_bwd={'availableMemoryProportion': <value>}` instead. Maximum
-      fraction of IPU memory which can be used as temporary scratch space during
-      computation, for the backward propagation layer. A value of -1. or None
-      indicates that the default in Popnn should be used. Note that the value in
-      `options_bwd['availableMemoryProportion']` will be used if set together
-      with this argument.
     options: A Python dictionary.
       Implementation or debug options for the forward GRU cell in PopLibs. See
       the GRU documentation in the PopLibs API reference for the full list of
@@ -902,9 +791,6 @@ class PopnnGRU(_PopnnRNN):
       seed=None,
       partials_dtype=tf.float32,
       time_major=False,
-      # TODO(T54285): Remove `available_memory_proportion_[b|f]wd`.
-      available_memory_proportion_fwd=None,
-      available_memory_proportion_bwd=None,
       options=None,
       options_bwd=None,
       **kwargs):
@@ -960,26 +846,23 @@ class PopnnGRU(_PopnnRNN):
 
     self._reset_after = reset_after
 
-    super(PopnnGRU, self).__init__(
-        num_units=units,
-        activation=activation,
-        recurrent_activation=recurrent_activation,
-        partials_dtype=partials_dtype,
-        seed=seed,
-        kernel_initializer=kernel_initializer,
-        recurrent_initializer=recurrent_initializer,
-        bias_initializer=bias_initializer,
-        dropout=dropout,
-        dropout_seed=dropout_seed,
-        return_state=return_state,
-        return_sequences=return_sequences,
-        time_major=time_major,
-        stateful=stateful,
-        available_memory_proportion_fwd=available_memory_proportion_fwd,
-        available_memory_proportion_bwd=available_memory_proportion_bwd,
-        options=options,
-        options_bwd=options_bwd,
-        **kwargs)
+    super().__init__(num_units=units,
+                     activation=activation,
+                     recurrent_activation=recurrent_activation,
+                     partials_dtype=partials_dtype,
+                     seed=seed,
+                     kernel_initializer=kernel_initializer,
+                     recurrent_initializer=recurrent_initializer,
+                     bias_initializer=bias_initializer,
+                     dropout=dropout,
+                     dropout_seed=dropout_seed,
+                     return_state=return_state,
+                     return_sequences=return_sequences,
+                     time_major=time_major,
+                     stateful=stateful,
+                     options=options,
+                     options_bwd=options_bwd,
+                     **kwargs)
 
   def _canonical_bias_shape(self, unused_layer):
     """Shapes of Popnn canonical bias tensors for given layer."""
@@ -1071,15 +954,8 @@ class PopnnGRU(_PopnnRNN):
       bias_tensor = tf.reshape(self.biases,
                                [self._num_gates_per_layer, self._num_units])
 
-    available_memory_proportion_fwd = -1. \
-        if self._available_memory_proportion_fwd is None \
-        else self._available_memory_proportion_fwd
-    available_memory_proportion_bwd = -1. \
-        if self._available_memory_proportion_bwd is None \
-        else self._available_memory_proportion_bwd
-
-    options = json.dumps(self._options_with_amp)
-    options_bwd = json.dumps(self._options_bwd_with_amp)
+    options = json.dumps(dict(self._options))
+    options_bwd = json.dumps(dict(self._options_bwd))
 
     output, _ = gen_popnn_ops.popnn_gru_layer(
         inputs=inputs,
