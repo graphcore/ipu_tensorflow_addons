@@ -155,10 +155,8 @@ class ModelInfo(TypedDict):
   """Analyzed profile for """
 
 
-class IPUInfo(TypedDict):
-  """Description of the IPU cluster"""
-  ipuClock: int
-  """IPU Clock Speed."""
+class ConnectionInfo(TypedDict):
+  """Description of the IPU connection."""
   sendGBps: int
   """Data transfer speed to the previous device in the pipeline.
 
@@ -175,6 +173,16 @@ class IPUInfo(TypedDict):
   recvIdleCycle: int
   """Number of idling cycles for the IPU before sending data to the next device.
   """
+
+
+class IPUClusterInfo(TypedDict):
+  """Description of the IPU cluster."""
+  clock: int
+  """The clock frequency of an IPU in Hz."""
+  memory: int
+  """The memory capacity of an IPU in MB."""
+  connection: List[ConnectionInfo]
+  """Data transferring speed between devices in the pipeline."""
 
 
 class AutoPipelineConfiguration(TypedDict):
