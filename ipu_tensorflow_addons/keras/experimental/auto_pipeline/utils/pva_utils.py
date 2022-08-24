@@ -276,3 +276,88 @@ def get_layer_cycle(report, name, compile_only):
   return sum(
       get_exec_step_cycle(step, 0) for step in report.execution.runs[0].steps
       if name in step.program.name)
+
+
+def get_pipeline_stage_cycles(report, compute_cycle_only=True):
+  """Find the cycle count of a pipeline stage on all IPUs, when the pipeline is
+  fully ramped up.
+
+  For the execution trace of running a pipelined model for prediction,
+  ___________
+  |_|_|_|_|_|
+    |_|_|_|_|
+      |_|_|_|
+        |_|_|
+           ^ <- Only cycle counts from this pipeline stage are used.
+
+  Arg:
+    report: A pipelined model profile. The model must predict at least
+    `2*n_ipu` batches.
+    compute_cycle_only: If `True`, the pipeline stage cycle will include cycle
+    counts of layer computation only, excluding cycle counts of CPU-IPU
+    `StreamCopy`, IPU-IPU `GlobalExchange`, and IPU `ExternalSync` steps.
+    If `False`, this function will include every cycle during the pipeline
+    stage, including CPU-IPU `StreamCopy`, IPU-IPU `GlobalExchange`, and IPU
+    `ExternalSync` steps.
+
+  Return:
+    A list of `n_ipu` integers. Number of cycles required to complete a pipeline
+    stage.
+  """
+  n_ipu = report.compilation.target.numIPUs
+
+  # All global changes that transfer more than 1024 Bytes of data
+  global_exchanges = [
+      step for step in report.execution.runs[0].steps
+      if step.program.type == PType.GlobalExchange
+      if sum(ipus.dataIn + ipus.dataOut for ipus in step.ipus) > 1024
+  ]
+
+  # Start of the fully ramped pipeline stage
+  pipeline_stage_start = global_exchanges[n_ipu - 1]
+
+  # End of the fully ramped pipeline stage
+  pipeline_stage_end = global_exchanges[n_ipu]
+
+  def in_pipeline_stage(step):
+    return all(ipu_cycles.activeCycles.cyclesFrom.max >=
+               pipeline_stage_start.ipus[ipu_id].activeCycles.cyclesTo.min
+               and ipu_cycles.activeCycles.cyclesTo.min <=
+               pipeline_stage_end.ipus[ipu_id].activeCycles.cyclesFrom.max
+               for ipu_id, ipu_cycles in enumerate(step.ipus))
+
+  # Pipeline stage cycles including data transferring cycles idling cycles
+  pipeline_cycles = [
+      pipeline_stage_end.ipus[i].activeCycles.cyclesTo.max -
+      pipeline_stage_start.ipus[i].activeCycles.cyclesTo.max
+      for i in range(n_ipu)
+  ]
+
+  # If we want data transferring steps in the cycle counts
+  if not compute_cycle_only:
+    return pipeline_cycles
+
+  # External syncs during this pipeline stage
+  external_syncs = [
+      step for step in report.execution.runs[0].steps
+      if step.program.type == PType.Sync and step.program.name == "External"
+      and in_pipeline_stage(step)
+  ]
+
+  # Stream copy during this pipeline stage, including Model Input from CPU to
+  # the first IPU and model ouput from last IPU to CPU
+  stream_copys = [
+      step for step in report.execution.runs[0].steps if step.program.type in
+      [PType.StreamCopyBegin, PType.StreamCopyMid, PType.StreamCopyEnd]
+      and in_pipeline_stage(step)
+  ]
+
+  # Remove `GlobalExchange`, `ExternalSync`, `StreamCopy` cycle counts
+  # to find the computation cycle counts of each IPU in this pipeline stage.
+  for step in [pipeline_stage_end] + external_syncs + stream_copys:
+    for ipu_id, ipu_cycles in enumerate(step.ipus):
+      cycle = ipu_cycles.activeCycles.cyclesTo.max
+      cycle -= ipu_cycles.activeCycles.cyclesFrom.max
+      pipeline_cycles[ipu_id] -= cycle
+
+  return pipeline_cycles
