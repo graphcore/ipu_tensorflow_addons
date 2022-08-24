@@ -15,6 +15,7 @@
 """Helper functions for analyzing a `keras.Model` instance."""
 import functools
 import logging
+import json
 import tensorflow as tf
 import keras
 import numpy as np
@@ -52,8 +53,8 @@ def tf_tensor_size(x, batch_size):
 
 
 def tf_nested_map_structure_tensor(tensor_func, struct):
-  """Creates a new structure by applying `tensor_func` to every `tf.Tensor` or
-  `tf.TensorShape` in the struct.
+  """Creates a new structure by applying `tensor_func` to every keras dummy
+  tensor in the struct.
 
   Args:
     tensor_func: Function to apply to a dummy Keras tensor.
@@ -129,7 +130,7 @@ def parse_model_intermediate(model, batch_size):
        array([ 65536, 131072, 131072,  65536,   1024])]
   """
 
-  assignments: types.AssignmentList = model.get_pipeline_stage_assignment()
+  assignments = model.get_pipeline_stage_assignment()
   n_layer = len(assignments)
   # id -> [created by which layer, last used by which layer, size]
   tensors = {}
@@ -226,3 +227,69 @@ def parse_model_intermediate(model, batch_size):
                                    [node.output_tensors])
 
   return memory_intermediate, memory_input, memory_output
+
+
+def tf_nested_map_structure_all_tensor(tensor_func, struct):
+  """Creates a new structure by applying `tensor_func` to every `tf.Tensor` or
+  `tf.TensorShape` in the struct.
+
+  The difference between this function and `tf_nested_map_structure_tensor` is
+  that `tf_nested_map_structure_tensor` maps keras dummy tensors only.
+
+  Args:
+    tensor_func: Function to apply to a tensor.
+    struct: The structure to be mapped.
+
+  Return:
+    The object returned by mapping every tensor.
+  """
+
+  # Wrap tensor_func for tf.nest.map_structure
+  def all_func(x):
+    if hasattr(x, "shape") and hasattr(x, "dtype"):
+      return tensor_func(x)
+    return x
+
+  return tf.nest.map_structure(all_func, struct)
+
+
+def get_assignment_layer_type(assignment, batch_size):
+  """Create a string for identifying an invocation of a layer.
+
+  This function should return an equal string for two layer invocations only
+  when the computation of the two layers is equal, but possibly with different
+  parameters or arguments.
+
+  Args:
+    assignment: A `PipelineStageAssignment` object, which includes the layer and
+    call arguments of this layer invocation.
+    batch_size: Batch size to be used with the model.
+
+  Return:
+    A string identifying the invocation.
+  """
+  layer = assignment.layer
+  node_index = getattr(assignment, "node_index", 0)
+  node = layer.inbound_nodes[node_index]
+
+  step_prop = {
+      # Layer class name
+      "class": [layer.__class__.__module__, layer.__class__.__name__],
+      # Layer argument shape and dtype
+      "args":
+      tf_nested_map_structure_all_tensor(
+          lambda x: str([prepend_batchsize(x.shape, batch_size), x.dtype]),
+          [node.call_args, node.call_kwargs]),
+      # weight shape and dtype
+      "weight": [str([x.shape, x.dtype]) for x in layer.get_weights()],
+      # Config
+      "config": {
+          k: str(v)
+          for k, v in layer.get_config().items()
+          # These keys do not affect computation of a layer.
+          if not any(s in k for s in ["trainable", "initializer", "name"])
+          # A float value is usually a constant value.
+          and not isinstance(v, float)
+      }
+  }
+  return json.dumps(step_prop, sort_keys=True)
