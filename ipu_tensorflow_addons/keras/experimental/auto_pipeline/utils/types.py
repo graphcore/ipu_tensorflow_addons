@@ -29,7 +29,7 @@ class CycleInfo(TypedDict):
 
 
 class MemoryBaseInfo(TypedDict):
-  """Common memory breakdown for a layer or a pipeline step run on an IPU."""
+  """Common memory breakdown for a layer or a pipeline stage run on an IPU."""
 
   shared: Dict[str, int]
   '''This dictionary keeps information of variables that could be shared between
@@ -69,7 +69,7 @@ class MemoryBaseInfo(TypedDict):
 
     Suppose parameter takes 4096 Bytes for each layer. Then the `exclusive`
     dictionary should include `{"param":4096}` for both layers. If a pipeline
-    step includes only these two `Dense` layer, the pipeline step should have
+    stage includes only these two `Dense` layer, the pipeline stage should have
     a parameter size of 8192 bytes.
   '''
 
@@ -110,7 +110,7 @@ class MemoryLayerInfo(MemoryBaseInfo):
 
 
 class MemoryRangeInfo(MemoryBaseInfo):
-  """Memory breakdown for a pipeline step run on an IPU."""
+  """Memory breakdown for a pipeline stage run on an IPU."""
   maxTemporary: int
   """Maximum temporary memory used.
 
@@ -145,7 +145,7 @@ class ModelInfo(TypedDict):
   layerName: List[str]
   """Name of layer.
 
-  Used to identity which layers need to be in the same pipeline step, for the
+  Used to identity which layers need to be in the same pipeline stage, for the
   variable constraint.
   """
   layerType: List[str]
@@ -191,10 +191,10 @@ class AutoPipelineConfiguration(TypedDict):
   """Proportion of memory to use on IPUs.
 
   The auto pipelining algorithm finds a pipeline stage assignment, such that
-  each pipeline step is estimated to fit in `memoryProportion` * IPU memory.
+  each pipeline stage is estimated to fit in `memoryProportion` * IPU memory.
 
   This is used to increase the chance of finding a valid pipeline stage
-  assignment. If we under-estimate the memory consumption of a pipeline step,
+  assignment. If we under-estimate the memory consumption of a pipeline stage,
   the under-estimated part of memory may still fit in the remaining memory.
 
   If a model triggers an OOM (out of memory) error with the suggested pipeline

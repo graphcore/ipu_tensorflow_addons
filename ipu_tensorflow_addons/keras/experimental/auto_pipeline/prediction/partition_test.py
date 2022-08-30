@@ -220,7 +220,7 @@ TEST_CASES = [
     },
     {
         # There is only one possible split,
-        # because layers 01/2345 needs to be on the same step.
+        # because layers 01/2345 needs to be on the same stage.
         "testcase_name": "Shared Parameter Constraint 2",
         "model_info": profile_2_param_constraint,
         "cluster_info": cluster_2_ipu_no_transfer_idle,
@@ -250,7 +250,7 @@ TEST_CASES = [
     },
     {
         # There is only one possible split,
-        # because layers 01/2345678/91011/12131415 need to be on the same step.
+        # because layers 01/2345678/91011/12131415 need to be on the same stage.
         "testcase_name": "Shared Parameter Constraint 4",
         "model_info": profile_4_param_constraint,
         "cluster_info": cluster_4_ipu_no_transfer_idle,
@@ -262,7 +262,7 @@ TEST_CASES = [
         # Split at layer 7 so that layers 67 is not on a same IPU.
         # Split between 2 and 6 so that layers 1,6 is not on a same IPU.
         # There is no constraint for the last split, because the computation
-        # cost is dominated by the last pipeline step.
+        # cost is dominated by the last pipeline stage.
         "testcase_name":
         "Memory Constraint 4",
         "model_info":

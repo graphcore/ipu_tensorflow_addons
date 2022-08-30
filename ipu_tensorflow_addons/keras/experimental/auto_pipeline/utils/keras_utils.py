@@ -163,9 +163,9 @@ def parse_model_intermediate(model, batch_size):
 
   # Initialize model.input tensor
   tf_nested_map_structure_tensor(lambda x: new_tensor(x, -1), [model.input])
-  for i, step in enumerate(assignments):
-    node_index = getattr(step, "node_index", 0)
-    layer = step.layer
+  for i, assignment in enumerate(assignments):
+    node_index = getattr(assignment, "node_index", 0)
+    layer = assignment.layer
     node = layer.inbound_nodes[node_index]
     # layer argument
     #pylint: disable=cell-var-from-loop
@@ -216,9 +216,9 @@ def parse_model_intermediate(model, batch_size):
     """
     memory_output[loc] += tf_tensor_size(x, batch_size)
 
-  for i, step in enumerate(assignments):
-    node_index = getattr(step, "node_index", 0)
-    layer = step.layer
+  for i, assignment in enumerate(assignments):
+    node_index = getattr(assignment, "node_index", 0)
+    layer = assignment.layer
     node = layer.inbound_nodes[node_index]
     #pylint: disable=cell-var-from-loop
     tf_nested_map_structure_tensor(lambda x: add_input(x, i),
@@ -272,7 +272,7 @@ def get_assignment_layer_type(assignment, batch_size):
   node_index = getattr(assignment, "node_index", 0)
   node = layer.inbound_nodes[node_index]
 
-  step_prop = {
+  layer_prop = {
       # Layer class name
       "class": [layer.__class__.__module__, layer.__class__.__name__],
       # Layer argument shape and dtype
@@ -292,4 +292,4 @@ def get_assignment_layer_type(assignment, batch_size):
           and not isinstance(v, float)
       }
   }
-  return json.dumps(step_prop, sort_keys=True)
+  return json.dumps(layer_prop, sort_keys=True)
