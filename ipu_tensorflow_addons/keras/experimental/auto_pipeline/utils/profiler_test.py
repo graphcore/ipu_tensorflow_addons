@@ -13,14 +13,32 @@
 # limitations under the License.
 # ==============================================================================
 """Test profiler"""
+import os
+import contextlib
+import tempfile
 from tensorflow.python.framework import test_util
-from tensorflow.python.platform import googletest
+from tensorflow.python.platform import googletest, test
 from tensorflow.python.ipu import test_utils as tu
 from absl.testing import parameterized
 import keras
 from keras import layers
 from ipu_tensorflow_addons.keras.experimental.auto_pipeline.utils import (
     profiler)
+
+
+@contextlib.contextmanager
+def temporary_executable_cache():
+  """Configure the environment variable to set up execution cache.
+  """
+  with tempfile.TemporaryDirectory() as temp_dir:
+    # Use a nonexistent subdirectory that must be created
+    cache_dir = os.path.join(temp_dir, "cache")
+    old_poplar_flags = os.environ.get("TF_POPLAR_FLAGS", "")
+    poplar_flags = f"--executable_cache_path={cache_dir} {old_poplar_flags}"
+    # Disable the IPU model
+    poplar_flags = poplar_flags.replace("--use_ipu_model", "")
+    with test.mock.patch.dict("os.environ", {"TF_POPLAR_FLAGS": poplar_flags}):
+      yield
 
 
 def create_model_1():
@@ -56,14 +74,15 @@ class ProfileSingleLayerForwardTest(test_util.TensorFlowTestCase,
   @parameterized.named_parameters(*TEST_CASES)
   @test_util.run_v2_only
   def testAll(self, create_model, batch_size):
-    report_helper = tu.ReportHelper()
-    strategy = profiler.create_strategy(1, report_helper, True)
-    with strategy.scope():
-      model = create_model()
-      assignments = model.get_pipeline_stage_assignment()
-      for assignment in assignments:
-        profiler.profile_layer_from_assignment(assignment, batch_size,
-                                               strategy, report_helper)
+    with temporary_executable_cache():
+      report_helper = tu.ReportHelper()
+      strategy = profiler.create_strategy(1, report_helper, True)
+      with strategy.scope():
+        model = create_model()
+        assignments = model.get_pipeline_stage_assignment()
+        for assignment in assignments:
+          profiler.profile_layer_from_assignment(assignment, batch_size,
+                                                 strategy, report_helper)
 
 
 if __name__ == "__main__":

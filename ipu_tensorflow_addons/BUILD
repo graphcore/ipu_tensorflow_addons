@@ -7,6 +7,7 @@ py_library(
     name = "ipu_tensorflow_addons",
     srcs = ["__init__.py"],
     deps = [
+        "//ipu_tensorflow_addons/keras/experimental/auto_pipeline",
         "//ipu_tensorflow_addons/keras/layers",
         "//ipu_tensorflow_addons/keras/optimizers",
         "//ipu_tensorflow_addons/util",
