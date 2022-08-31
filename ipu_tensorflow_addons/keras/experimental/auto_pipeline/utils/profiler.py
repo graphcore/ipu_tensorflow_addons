@@ -19,7 +19,7 @@ from ipu_tensorflow_addons.keras.experimental.auto_pipeline.utils import (
     keras_utils)
 
 
-def create_strategy(n_ipu, report_helper, compile_only=True):
+def create_strategy(n_ipu, report_helper, compile_only=True, cfg=None):
   """Configures IPUs and creates an IPU Strategy.
 
   Arg:
@@ -32,7 +32,9 @@ def create_strategy(n_ipu, report_helper, compile_only=True):
   Return:
     An `IPUStrategy`.
   """
-  cfg = ipu.config.IPUConfig()
+  if cfg is None:
+    cfg = ipu.config.IPUConfig()
+
   cfg.auto_select_ipus = n_ipu
   cfg.device_connection.version = "ipu2"
 

@@ -21,7 +21,7 @@ from ipu_tensorflow_addons.keras.experimental.auto_pipeline.utils import (
     profiler, pva_utils, types_utils)
 
 
-def estimate_pipelined_model_profile(model_profile, partition):
+def estimate_pipelined_model_profile(model_profile, cluster_info, partition):
   """Estimate the profile of the pipelined model from profiles of layers in the
   model.
 
@@ -46,6 +46,12 @@ def estimate_pipelined_model_profile(model_profile, partition):
           types_utils.get_empty_range_info())
       for i in range(len(partition) - 1)
   ]
+
+  # Add transfer cycles.
+  for i, range_info in enumerate(range_infos):
+    transfer = types_utils.transfer_cycle(cluster_info, i, model_profile,
+                                          partition[i], partition[i + 1])
+    range_info["cycle"]["total"] = range_info["cycle"]["forward"] + transfer
   return range_infos
 
 
@@ -63,12 +69,18 @@ def parse_pipelined_model_profile(profile_pop):
   """
   report = pva.openReport(profile_pop)
   n_ipu = len(report.compilation.ipus)
-  pipeline_cycle = pva_utils.get_pipeline_stage_cycles(report)
+  if n_ipu == 1:
+    ipu_compute_cycle = pva_utils.get_single_ipu_cycles(report, True)
+    ipu_total_cycle = pva_utils.get_single_ipu_cycles(report, False)
+  else:
+    ipu_compute_cycle = pva_utils.get_pipeline_stage_cycles(report, True)
+    ipu_total_cycle = pva_utils.get_pipeline_stage_cycles(report, False)
   pipeline_profiles = [
       {
           "cycle": {
-              "forward": int(pipeline_cycle[i]),
-              "backward": 0
+              "forward": ipu_compute_cycle[i],
+              "backward": 0,
+              "total": ipu_total_cycle[i]
           },
           "memory": {
               "shared": {
@@ -101,16 +113,25 @@ def parse_pipelined_model_profile(profile_pop):
 
 def profile_pipelined_model(create_model,
                             create_data,
+                            batch_size,
                             partition,
+                            ipu_cfg=None,
                             save_profile_path=None):
-  """Run and profile a model with minimal data to evaluate pipeline performance.
+  """Run and profile a model with minimal data to evaluate the performance of
+  the pipelined model.
 
   Args:
     create_model: A function to create the model.
-    create_data: A function which takes an integer argument `x` and returns
-    a dataset with `x` batches.
+    create_data: A function to generate a dataset for the model. The function
+    should be a function that accepts two numbers: number of batches in the
+    dataset and the batch size. The function should return a `tf.data.Dataset`.
+    batch_size: Batch size to be used with the model.
     partition: A list of `n_ipu+1` integers. The `i`-th element in the list
     indicates the first layer of the `i`-th pipeline stage.
+    ipu_cfg: A `tensorflow.python.ipu.config.IPUConfig` object or `None`. The
+    default value for this argument is `None`.
+      If `IPUConfig`, the `IPUConfig` will be used to configure the IPU system.
+      If `None`, a default `IPUConfig` will be used to configure the IPU system.
     save_profile_path: The path to save a copy of the profile.
       If `None`, the profile will be deleted after analyzing the profile.
 
@@ -121,22 +142,24 @@ def profile_pipelined_model(create_model,
   """
   report_helper = tu.ReportHelper()
   n_ipu = len(partition) - 1
-  strategy = profiler.create_strategy(n_ipu, report_helper, compile_only=False)
+  strategy = profiler.create_strategy(n_ipu, report_helper, False, ipu_cfg)
   with strategy.scope():
     model = create_model()
-    assignments = model.get_pipeline_stage_assignment()
-    for i in range(n_ipu):
-      for j in range(partition[i], partition[i + 1]):
-        assignments[j].pipeline_stage = i
+    if n_ipu == 1:
+      data = create_data(1, batch_size)
+    else:
+      assignments = model.get_pipeline_stage_assignment()
+      for i in range(n_ipu):
+        for j in range(partition[i], partition[i + 1]):
+          assignments[j].pipeline_stage = i
+      model.set_pipeline_stage_assignment(assignments)
 
-    model.set_pipeline_stage_assignment(assignments)
+      # Run the model with `2*n_ipu` batches.
+      # At `n_ipu`-th stage, the model is fully ramped up.
+      data = create_data(n_ipu * 2, batch_size)
+      model.compile(steps_per_execution=n_ipu * 2)
 
-    # Run the model with `2*n_ipu` batches.
-    # At `n_ipu`-th stage, the model is fully ramped up.
-    data = create_data(n_ipu * 2)
-    model.compile(stages_per_execution=n_ipu * 2)
     model.predict(data)
-
   pva_pop = report_helper.find_reports()[-1]
 
   if save_profile_path:

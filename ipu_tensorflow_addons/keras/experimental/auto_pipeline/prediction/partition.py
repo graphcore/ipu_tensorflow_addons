@@ -29,14 +29,14 @@ except ImportError:
   tqdm = lambda x: x
 
 
-def parse_layer_profile(layer, pva_pop, config):
+def parse_layer_profile(layer, pva_pop, autopipe_config):
   """Read a single-layer PVA profile and return an analyzed layer profile.
 
   Args:
     layer: The Keras Layer to be analyzed.
     pva_pop: The path to the single-layer PVA profile.
-    config: A `ipu_tensorflow_addons.keras.experimental.auto_pipeline.utils
-    .types.AutoPipelineConfiguration` dictionary. The configuration for
+    autopipe_config: An `ipu_tensorflow_addons.keras.experimental.auto_pipeline
+    .utils.types.AutoPipelineConfiguration` dictionary. The configuration for
     automatic pipelining.
 
   Returns:
@@ -44,7 +44,7 @@ def parse_layer_profile(layer, pva_pop, config):
     .LayerInfo` dictionary.
 
   """
-  compile_only = config["usePoplarEstimation"]
+  compile_only = autopipe_config["usePoplarEstimation"]
   report = pva.openReport(pva_pop)
   if not pva_utils.check_report(report, layer.name):
     return types_utils.get_empty_layer_info()
@@ -82,20 +82,30 @@ def parse_layer_profile(layer, pva_pop, config):
   }
 
 
-def create_model_profile(create_model, batch_size, config):
+def create_model_profile(create_model,
+                         batch_size,
+                         autopipe_config,
+                         ipu_cfg=None):
   """Profile each layer in the model and return a profile of the model.
 
   Args:
     create_model: A function to create the model.
     batch_size: Batch size to be used with the model.
+    autopipe_cfg: An `ipu_tensorflow_addons.keras.experimental.auto_pipeline
+    .utils.types.AutoPipelineConfiguration` dictionary. The configuration for
+    automatic pipelining.
+    ipu_cfg: A `tensorflow.python.ipu.config.IPUConfig` object or `None`. The
+    default value for this argument is `None`.
+      If `IPUConfig`, the `IPUConfig` will be used to configure the IPU system.
+      If `None`, a default `IPUConfig` will be used to configure the IPU system.
 
   Return:
     A `ipu_tensorflow_addons.keras.experimental.auto_pipeline.utils.types
     .RangeInfo` dictionary.
   """
   report_helper = tu.ReportHelper()
-  compile_only = config["usePoplarEstimation"]
-  strategy = profiler.create_strategy(1, report_helper, compile_only)
+  compile_only = autopipe_config["usePoplarEstimation"]
+  strategy = profiler.create_strategy(1, report_helper, compile_only, ipu_cfg)
   with strategy.scope():
     model = create_model()
     assignments = model.get_pipeline_stage_assignment()
@@ -127,7 +137,7 @@ def create_model_profile(create_model, batch_size, config):
         profile_pop = profiler.profile_layer_from_assignment(
             assignment, batch_size, strategy, report_helper)
         original_result = parse_layer_profile(assignment.layer, profile_pop,
-                                              config)
+                                              autopipe_config)
         layer_info_cache[layer_types[i]] = original_result
 
       # Make a copy of the original profile and update some location-specific

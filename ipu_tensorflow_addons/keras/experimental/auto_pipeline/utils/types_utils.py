@@ -26,7 +26,8 @@ def get_empty_layer_info():
   return {
       "cycle": {
           "forward": 0,
-          "backward": 0
+          "backward": 0,
+          "total": 0,
       },
       "memory": {
           "shared": {},
@@ -50,7 +51,8 @@ def get_empty_range_info():
   return {
       "cycle": {
           "forward": 0,
-          "backward": 0
+          "backward": 0,
+          "total": 0,
       },
       "memory": {
           # The "inputs" and "outputs" properties are intentionally excluded,
@@ -228,12 +230,12 @@ def compare_pipelined_model_profile(estimated_profile, actual_profile):
     category = {
         "cycle": {
             "total": {
-                "Act":
-                act_stage_profile["cycle"]["forward"] +
-                act_stage_profile["cycle"]["backward"],
-                "Est":
-                estimated_stage_profile["cycle"]["forward"] +
-                estimated_stage_profile["cycle"]["backward"],
+                "Act": act_stage_profile["cycle"]["total"],
+                "Est": estimated_stage_profile["cycle"]["total"]
+            },
+            "forward": {
+                "Act": act_stage_profile["cycle"]["forward"],
+                "Est": estimated_stage_profile["cycle"]["forward"]
             },
             "backward": {
                 "Act": act_stage_profile["cycle"]["backward"],

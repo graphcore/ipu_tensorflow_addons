@@ -333,31 +333,50 @@ def get_pipeline_stage_cycles(report, compute_cycle_only=True):
       for i in range(n_ipu)
   ]
 
-  # If we want data transferring steps in the cycle counts
-  if not compute_cycle_only:
-    return pipeline_cycles
+  # Remove data transfer cycles
+  if compute_cycle_only:
+    # External syncs during this pipeline stage
+    external_syncs = [
+        step for step in report.execution.runs[0].steps
+        if step.program.type == PType.Sync and step.program.name == "External"
+        and in_pipeline_stage(step)
+    ]
 
-  # External syncs during this pipeline stage
-  external_syncs = [
-      step for step in report.execution.runs[0].steps
-      if step.program.type == PType.Sync and step.program.name == "External"
-      and in_pipeline_stage(step)
-  ]
+    # Stream copy during this pipeline stage, including Model Input from CPU to
+    # the first IPU and model ouput from last IPU to CPU
+    stream_copys = [
+        step for step in report.execution.runs[0].steps if step.program.type in
+        [PType.StreamCopyBegin, PType.StreamCopyMid, PType.StreamCopyEnd]
+        and in_pipeline_stage(step)
+    ]
 
-  # Stream copy during this pipeline stage, including Model Input from CPU to
-  # the first IPU and model ouput from last IPU to CPU
-  stream_copys = [
-      step for step in report.execution.runs[0].steps if step.program.type in
-      [PType.StreamCopyBegin, PType.StreamCopyMid, PType.StreamCopyEnd]
-      and in_pipeline_stage(step)
-  ]
-
-  # Remove `GlobalExchange`, `ExternalSync`, `StreamCopy` cycle counts
-  # to find the computation cycle counts of each IPU in this pipeline stage.
-  for step in [pipeline_stage_end] + external_syncs + stream_copys:
-    for ipu_id, ipu_cycles in enumerate(step.ipus):
-      cycle = ipu_cycles.activeCycles.cyclesTo.max
-      cycle -= ipu_cycles.activeCycles.cyclesFrom.max
-      pipeline_cycles[ipu_id] -= cycle
+    # Remove `GlobalExchange`, `ExternalSync`, `StreamCopy` cycle counts
+    # to find the computation cycle counts of each IPU in this pipeline stage.
+    for step in [pipeline_stage_end] + external_syncs + stream_copys:
+      for ipu_id, ipu_cycles in enumerate(step.ipus):
+        cycle = ipu_cycles.activeCycles.cyclesTo.max
+        cycle -= ipu_cycles.activeCycles.cyclesFrom.max
+        pipeline_cycles[ipu_id] -= cycle
 
   return pipeline_cycles
+
+
+def get_single_ipu_cycles(report, compute_cycle_only=True):
+  exec_copys = [
+      step for step in report.execution.runs[0].steps if step.program.type in
+      [PType.StreamCopyBegin, PType.StreamCopyMid, PType.StreamCopyEnd]
+      and step.program.name not in ["", "__seed"]
+  ]
+  exec_start = min(step.ipus[0].activeCycles.cyclesFrom.max
+                   for step in exec_copys)
+  exec_end = max(step.ipus[0].activeCycles.cyclesTo.max for step in exec_copys)
+  total_cycle = exec_end - exec_start
+
+  if compute_cycle_only:
+    for step in exec_copys:
+      ipu_cycles = step.ipus[0]
+      copy_cycle = ipu_cycles.activeCycles.cyclesTo.max
+      copy_cycle -= ipu_cycles.activeCycles.cyclesFrom.max
+      total_cycle -= copy_cycle
+
+  return [total_cycle]

@@ -26,6 +26,8 @@ class CycleInfo(TypedDict):
   """
   backward: int
   """Number of cycles to complete training for a batch, excluding IO cycles."""
+  total: int
+  """Number of cycles to complete computation and data transfer."""
 
 
 class MemoryBaseInfo(TypedDict):
