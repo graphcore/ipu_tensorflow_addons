@@ -109,6 +109,23 @@ The `{C}` in `--jobs {C}` specifies how many parallel tests to run. This value s
 
 Note that `--use_ipu_model` and `--ipu_model_tiles` have been omitted from `--test_env=TF_POPLAR_FLAGS`.
 
+## Documentation
+Documentation can be found in the `docs` folder. For more information on how these are compiled, see the TensorFlow View repo.
+
+### Using .inc files
+The page `ipu_tensorflow_addons.rst` contains a heading, and includes various pages to be grouped under that heading in the compiled docs.
+If you want to add a new page, it should almost certainly be created as a `.inc` file and included in `ipu_tensorflow_addons.rst`.
+
+### Python interface docs
+The page `api.rst` uses the sphinx automodule extension to generate Python interface documentation from source files.
+If you add a new namespace and want it to appear in the interface docs, you will most likely need to add it to `api.rst`.
+Each namespace can also have whitelisted and/or blacklisted members so you may also have to add/exclude individual members you create in a given namespace.
+
+### API changes
+The page `api-changes.rst` details the changes to the API for every realease.
+If you make any user-facing changes to a Python interface you should document them in this file.
+Each release has its own section in this file. A new section is added to the top after each release.
+
 ## Licensing
 
 Copyright (c) 2021 Graphcore Ltd. All Rights Reserved.
