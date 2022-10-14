@@ -127,6 +127,7 @@ def _lstmCPU(*args, **kwargs):
 
 
 class IpuLstmTest(test.TestCase):
+
   def _get_random_inputs(self, time_major=False, num_samples=1):
     np.random.seed(42)
     h = np.random.rand(batch_size, num_hidden).astype(data_type)
@@ -425,10 +426,10 @@ class IpuLstmTest(test.TestCase):
                                        dtype=tf.int32,
                                        batch_size=batch_size)
 
-      with ipu.keras.PipelineStage(0):
+      with keras.ipu.PipelineStage(0):
         x = layers.Embedding(8000, 128)(input_layer)
 
-      with ipu.keras.PipelineStage(1):
+      with keras.ipu.PipelineStage(1):
         x = layers.PopnnLSTM(128, dropout=0.2)(x)
         x = keras.layers.Dense(1, activation='sigmoid')(x)
 
@@ -580,6 +581,7 @@ def _gruCPU(*args, **kwargs):
 
 
 class IpuGruTest(test.TestCase):
+
   def _get_random_inputs(self, time_major=False, num_samples=1):
     np.random.seed(43)
     init = np.random.rand(batch_size, num_hidden).astype(data_type)

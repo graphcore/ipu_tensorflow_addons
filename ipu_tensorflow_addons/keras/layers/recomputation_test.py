@@ -28,6 +28,7 @@ from ipu_tensorflow_addons.keras import layers
 
 
 class KerasPipelineRecomputationTest(test.TestCase):
+
   @test_util.run_v2_only
   def testRecomputationCheckpoint(self):
     cfg = ipu.config.IPUConfig()
@@ -52,7 +53,7 @@ class KerasPipelineRecomputationTest(test.TestCase):
 
     def make_model(checkpoints=False):
       input_layer = keras.layers.Input(shape=IM_SIZE)
-      with ipu.keras.PipelineStage(0):
+      with keras.ipu.PipelineStage(0):
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(input_layer)
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(x)
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(x)
@@ -61,7 +62,7 @@ class KerasPipelineRecomputationTest(test.TestCase):
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(x)
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(x)
         x = keras.layers.Conv2D(NUM_FILTERS, 3, activation="relu")(x)
-      with ipu.keras.PipelineStage(1):
+      with keras.ipu.PipelineStage(1):
         x = keras.layers.Dense(1,
                                kernel_initializer='glorot_uniform',
                                activation=keras.activations.relu)(x)

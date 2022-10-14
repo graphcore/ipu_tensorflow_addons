@@ -26,17 +26,17 @@ def get_dataset():
 def get_model():
   input_layer = keras.layers.Input(shape=(80), dtype=tf.int32, batch_size=32)
 
-  with ipu.keras.PipelineStage(0):
+  with keras.ipu.PipelineStage(0):
     x = ipu_layers.Embedding(max_features, 64)(input_layer)
     x = ipu_layers.LSTM(64, dropout=0.2)(x)
 
-  with ipu.keras.PipelineStage(1):
+  with keras.ipu.PipelineStage(1):
     a = keras.layers.Dense(8, activation='relu')(x)
 
-  with ipu.keras.PipelineStage(2):
+  with keras.ipu.PipelineStage(2):
     b = keras.layers.Dense(8, activation='relu')(x)
 
-  with ipu.keras.PipelineStage(3):
+  with keras.ipu.PipelineStage(3):
     x = keras.layers.Concatenate()([a, b])
     x = keras.layers.Dense(1, activation='sigmoid')(x)
 
