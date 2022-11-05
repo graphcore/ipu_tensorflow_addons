@@ -89,6 +89,7 @@ class EffectiveTransformer(layers.Layer):
     output_bias_initializer: The initializer for the output layer additive
       bias. Defaults to 'zeros'.
   """
+
   def __init__(self,
                output_layer_size,
                max_batch_size,
@@ -138,12 +139,12 @@ class EffectiveTransformer(layers.Layer):
 
     Args:
       input_shapes: A list of Tensor shapes of length four or five. In the
-      case of four elements provided in `input_shapes`, the Tensor shapes
-      should correspond to the `from_sequences`, `from_sequence_lengths`,
-      `to_sequences` and `to_sequence_lengths` Tensor arguments to the
-      `call` method. In the case of five Tensor shapes provided in
-      `input_shapes`, the fifth element should correspond to the optional
-      `q_mask` input to the `call` method.
+        case of four elements provided in `input_shapes`, the Tensor shapes
+        should correspond to the `from_sequences`, `from_sequence_lengths`,
+        `to_sequences` and `to_sequence_lengths` Tensor arguments to the
+        `call` method. In the case of five Tensor shapes provided in
+        `input_shapes`, the fifth element should correspond to the optional
+        `q_mask` input to the `call` method.
     """
     if len(input_shapes) not in (4, 5):
       raise ValueError("EffectiveTransformer must be built with either "
@@ -255,9 +256,9 @@ class EffectiveTransformer(layers.Layer):
 
     Args:
       inputs: A list of input Tensors, of at least four elements containing
-      `from_sequences`, `from_sequence_lengths`, `to_sequences` and
-      `to_sequence_lengths`. Additionally, a fifth tensor `q_mask` for
-      attention head masking can be provided.
+        `from_sequences`, `from_sequence_lengths`, `to_sequences` and
+        `to_sequence_lengths`. Additionally, a fifth tensor `q_mask` for
+        attention head masking can be provided.
     """
     if len(inputs) not in (4, 5):
       raise ValueError(
@@ -488,6 +489,7 @@ class EffectiveTransformer(layers.Layer):
     to_len = tf.squeeze(to_seq_lengths)
 
     def _loop_condition(end_idx, num_used_from, num_used_to):
+
       def _check_bounds():
         # Will the next step take us over either limit?
         will_not_exceed_from = \
@@ -655,6 +657,7 @@ class EffectiveTransformer(layers.Layer):
       [0, 0, 0, 0]]
 
     """
+
     def _slice_back(seq_out, row, row_idx):
       # Insert row into seq_out at row_idx.
       return sequence_slice(seq_out, row, [1], [0], [row_idx], False)

@@ -47,11 +47,21 @@ class AssumeEqualAcrossReplicas(keras.layers.Layer):
       or operated on inplace. This is needed when using
       `AssumeEqualAcrossReplicas` with tensor slices.
   """
+
   def __init__(self, inplace=False, **kwargs):
     super().__init__(**kwargs)
     self.inplace = inplace
 
   def call(self, inputs, **kwargs):  # pylint: disable=unused-argument
+    """Prevent inputs from causing divergency errors by marking them equal
+    across replicas.
+
+    Args:
+      inputs: Tensor to apply the layer to.
+
+    Returns:
+      The layer's output tensor that will not cause divergency errors.
+    """
     return cross_replica_ops.assume_equal_across_replicas(inputs, self.inplace)
 
   def get_config(self):
