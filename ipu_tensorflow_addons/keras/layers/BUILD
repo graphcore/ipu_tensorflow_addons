@@ -10,6 +10,7 @@ py_library(
         "dropout.py",
         "effective_transformer.py",
         "embedding_lookup.py",
+        "f8_convert.py",
         "ipu_layer.py",
         "normalization.py",
         "recomputation.py",
@@ -61,6 +62,13 @@ py_test(
     name = "embedding_lookup_test",
     size = "large",
     srcs = ["embedding_lookup_test.py"],
+    deps = [":layers"],
+)
+
+py_test(
+    name = "f8_convert_test",
+    size = "small",
+    srcs = ["f8_convert_test.py"],
     deps = [":layers"],
 )
 

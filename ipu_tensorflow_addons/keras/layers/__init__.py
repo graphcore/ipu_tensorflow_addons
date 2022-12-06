@@ -19,7 +19,8 @@ Keras layers made for IPU TensorFlow
 
 from ipu_tensorflow_addons.keras.layers.assume_equal_across_replicas import AssumeEqualAcrossReplicas
 from ipu_tensorflow_addons.keras.layers.ctc import CTCInferenceLayer, CTCLoss, CTCPredictionsLayer
-from ipu_tensorflow_addons.keras.layers.dense import SerialDense
+from ipu_tensorflow_addons.keras.layers.dense import SerialDense, Dense
+from ipu_tensorflow_addons.keras.layers.f8_convert import ConvertToF8, ConvertFromF8
 from ipu_tensorflow_addons.keras.layers.dropout import Dropout
 from ipu_tensorflow_addons.keras.layers.effective_transformer import EffectiveTransformer
 from ipu_tensorflow_addons.keras.layers.embedding_lookup import Embedding

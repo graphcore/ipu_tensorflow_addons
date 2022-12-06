@@ -23,6 +23,11 @@ Dense Keras layer
 import tensorflow.compat.v2 as tf
 from tensorflow import keras
 from tensorflow.python.ipu.ops import math_ops as ipu_math_ops
+from tensorflow.python.ipu.ops.f8_ops import f8_matmul, create_metadata, QuarterTensor, Format
+
+from keras import backend as K
+from keras.engine.input_spec import InputSpec
+import numpy as np
 
 
 class SerialDense(keras.layers.Layer):
@@ -93,6 +98,7 @@ class SerialDense(keras.layers.Layer):
     For instance, for a 2D input with shape `(batch_size, input_dim)`,
     the output would have shape `(batch_size, units)`.
   """
+
   def __init__(self,
                units,
                serialization_factor,
@@ -240,3 +246,180 @@ class SerialDense(keras.layers.Layer):
     }
     base_config = super().get_config()
     return dict(list(base_config.items()) + list(config.items()))
+
+
+class Dense(keras.layers.Dense):
+  """Dense layer with support for fp8 matrix multiplication.
+
+  The layer uses fp8 when it is passed a list as its input, in which case it
+  expects this input to come from a ConvertToF8 layer.
+
+  Otherwise you should be able to pass most of the options available for the
+  normal keras Dense layer.
+
+  Note: you should not pass the output of convert_to_f8 directly to this layer,
+  as it returns a QuarterTensor instead of a list that this layer expects.
+
+  The default initializer for the kernel data is uniformly random in all
+  possible uint8 values (other than the error value 0x80 which gets mapped to
+  0). You can change this by passing an initializer to the constructor through
+  `kernel_data_initializer`. Keep in mind that this will need to return uint8
+  data, which you will most likely want to get from a call to `convert_to_f8`.
+
+  By default the kernel metadata will be set to a scale of 0 and `F143` format.
+  If you need a different kernel scale / format, you can achieve that by
+  passing `kernel_scale` and `kernel_format` parameters to the constructor. The
+  passed scale should be in the inclusive range [-32, 31], which multiplies the
+  numeric value of the kernel by `2^kernel_scale`. The format should be
+  of type :py:class:`~tensorflow.python.ipu.ops.f8_ops.Format`.
+
+  You can also use the `get_weights` / `set_weights` methods to manipulate
+  the weights.
+
+  An example of using this layer eagerly:
+
+  .. code-block:: python
+
+    from tensorflow.python.ipu.ops.f8_ops import create_metadata, Format
+    from keras.ipu.layers import Dense, ConvertToF8
+    from tensorflow.python.ipu.ipu_strategy import IPUStrategyV1
+
+    strategy = IPUStrategyV1()
+    with strategy.scope():
+      input_array = np.array([[1., 2.], [3., -1.]])
+      f8_tensor = ConvertToF8()(input_array,
+                                metadata=create_metadata(Format.F143))
+      output = Dense(units=3)(f8_tensor)
+
+  An example of using this layer in a Functional model:
+
+  .. code-block:: python
+    from tensorflow.python.ipu.ops.f8_ops import create_metadata, Format
+    from keras.ipu.layers import Dense, ConvertToF8
+    from tensorflow.python.ipu.ipu_strategy import IPUStrategyV1
+
+    strategy = IPUStrategyV1()
+    with strategy.scope():
+      inputs = Input(dtype="float16", shape=[2], batch_size=2)
+      outputs = ConvertToF8()(inputs, metadata=create_metadata(Format.F143))
+      outputs = Dense(units=3)(outputs)
+      model = keras.Model(inputs, outputs)
+
+      input_array = np.array([[1., 2.], [3., -1.]])
+      model.predict(input_array, batch_size=2)
+
+  Input shape:
+    N-D tensor with shape: `(batch_size, ..., input_dim)`.
+    The most common situation would be
+    a 2D input with shape `(batch_size, input_dim)`.
+    In case of passing an fp8 input, the input should be the output of a
+    `ConvertToF8` layer.
+
+  Output shape:
+    N-D tensor with shape: `(batch_size, ..., units)`.
+    For instance, for a 2D input with shape `(batch_size, input_dim)`,
+    the output would have shape `(batch_size, units)`.
+
+  Args:
+    units: Positive integer, dimensionality of the output space.
+    kernel_format: Format of the kernel tensor when using fp8; one of
+      `Format.F143` or `Format.F152`. `Format` can be imported
+      from `tensorflow.python.ipu.ops.f8_ops`.
+    kernel_scale: Scale for the kernel tensor when using fp8.
+    kernel_data_initializer: An initializer for the kernel data when using fp8.
+  """
+
+  def __init__(self,
+               units,
+               kernel_format=Format.F143,
+               kernel_scale=0,
+               kernel_data_initializer=None,
+               **kwargs):
+    self._initialised_weights = False
+    self.kernel_format = kernel_format
+    if not -32 <= kernel_scale <= 31:
+      raise ValueError("`kernel_scale` should be in the range [-32, 31]. "
+                       f"The passed scale was {kernel_scale}.")
+    self.kernel_scale = kernel_scale
+    self.kernel_data_initializer = kernel_data_initializer
+    super().__init__(units, **kwargs)
+
+    # This is necessary since the input spec will depend on the input
+    self.input_spec = None
+
+  def call(self, inputs):
+    """Use fp8 MatMul if `inputs` is an instance of QuarterTensor.
+    Otherwise behave like a normal Dense layer.
+    """
+    if not isinstance(inputs, list):
+      if not self._initialised_weights:
+        super().build(inputs.shape)
+        self._initialised_weights = True
+      # Use keras.layers.Dense
+      return super().call(inputs)
+    inputs = QuarterTensor(*inputs)
+    # Perform fp8 deferred weight building
+    if not self._initialised_weights:
+      last_dim = tf.compat.dimension_value(inputs.shape[-1])
+      data_initializer = self.kernel_data_initializer
+      if not data_initializer:
+        data = np.random.randint(0, 256, [last_dim, self.units])
+        # Make sure that the data is not set to the error value 0x80.
+        data[data == 0x80] = 0
+        data_initializer = keras.initializers.Constant(data)
+      self.kernel_data = self.add_weight('kernel_data',
+                                         shape=[last_dim, self.units],
+                                         initializer=data_initializer,
+                                         dtype="uint8",
+                                         trainable=True)
+      metadata_initializer = keras.initializers.Constant(
+          create_metadata(self.kernel_format, self.kernel_scale))
+      self.kernel_metadata = self.add_weight('kernel_metadata',
+                                             shape=[],
+                                             dtype="uint8",
+                                             trainable=True,
+                                             initializer=metadata_initializer)
+
+      if self.use_bias:
+        # The bias should be float16 when multiplying fp8 values
+        self.bias = self.add_weight('bias',
+                                    shape=[
+                                        self.units,
+                                    ],
+                                    initializer=self.bias_initializer,
+                                    regularizer=self.bias_regularizer,
+                                    constraint=self.bias_constraint,
+                                    dtype="float16",
+                                    trainable=True)
+      else:
+        self.bias = None
+      self._initialised_weights = True
+    kernel = QuarterTensor(self.kernel_data, self.kernel_metadata)
+    outputs = f8_matmul(lhs=inputs, rhs=kernel)
+
+    if self.use_bias:
+      outputs = tf.nn.bias_add(outputs, self.bias)
+
+    if self.activation is not None:
+      outputs = self.activation(outputs)
+    return outputs
+
+  def build(self, input_shape):
+    """Stripped down version of keras.layers.Dense.build.
+
+    Defers weight construction to the call method so that we know if
+    we're dealing with fp8 matmul or not, depending on inputs.
+    """
+    dtype = tf.as_dtype(self.dtype or K.floatx())
+    if not (dtype.is_floating or dtype.is_complex):
+      raise TypeError('Unable to build `Dense` layer with non-floating point '
+                      f'dtype {dtype}')
+    if isinstance(input_shape, list):
+      return
+    input_shape = tf.TensorShape(input_shape)
+    last_dim = tf.compat.dimension_value(input_shape[-1])
+    if last_dim is None:
+      raise ValueError('The last dimension of the inputs to `Dense` '
+                       'should be defined. Found `None`.')
+    self.input_spec = InputSpec(min_ndim=2, axes={-1: last_dim})
+    self.built = True
