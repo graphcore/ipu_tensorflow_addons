@@ -37,7 +37,7 @@ def _generate_sequences(seq_lens, max_len, dtype):
 
 def _generate_ones_mask(a, b):
   mask = np.ones(shape=(a, b))
-  return mask.astype(np.bool)
+  return mask.astype(np.bool_)
 
 
 test_seq_lens = np.expand_dims(np.array([8, 3, 5, 7, 3], dtype=np.int32), 1)
@@ -125,6 +125,7 @@ SEQUENCE_PADDING_TEST_CASES = [{
 
 class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
                                        parameterized.TestCase):
+
   def testMismatchedSequenceRanks(self):
     from_seq = np.zeros((3, 3, 1), dtype=np.float32)
     to_seq = np.zeros((3, 3), dtype=np.float32)
@@ -186,7 +187,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
     seq_lens = np.array([3] * 3, dtype=np.int32)
 
     # Should be [num_sequences, num_heads]
-    q_mask = np.zeros((3, 2), dtype=np.bool)
+    q_mask = np.zeros((3, 2), dtype=np.bool_)
 
     transformer = EffectiveTransformer(12, 10)
     with self.assertRaisesRegex(ValueError, r"q_mask must have shape"):
@@ -198,7 +199,7 @@ class IPUEffectiveTransformerLayerTest(test_util.TensorFlowTestCase,
     seq_lens = np.zeros([3] * 3, dtype=np.int32)
 
     # Should be [num_sequences, num_heads]
-    q_mask = np.zeros((4, 1), dtype=np.bool)
+    q_mask = np.zeros((4, 1), dtype=np.bool_)
 
     transformer = EffectiveTransformer(12, 10)
     with self.assertRaisesRegex(ValueError, r"q_mask must have shape"):
