@@ -79,6 +79,7 @@ def search_for_max_throughput(binary_search_configs,
     use grid search to find an appropriate number of IPUs to run the model.
 
     .. code-block:: python
+
       # Configuration for AutoPipe.
       config = {"memoryProportion": 0.85, "usePoplarEstimation": False}
 

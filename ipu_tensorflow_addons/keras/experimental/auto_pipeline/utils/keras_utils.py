@@ -81,7 +81,7 @@ def parse_model_intermediate(model, batch_size):
     - Memory occupied by output tensors (including intermediate tensors).
 
   This is used to complete estimation for not-always-alive memory and estimation
-  for data transfering cycles.
+  for data transferring cycles.
 
   Args:
     model: A `keras.Model` created under an `IPUStrategy`.
@@ -93,7 +93,9 @@ def parse_model_intermediate(model, batch_size):
   Example:
     The below code snippet shows how the three arrays are calculated for a model
     with a residual connection.
+
     .. code-block:: python
+
       def create_model():
         # InputLayer does not appear in pipeline_stage_assignment
         x0 = layers.Input(shape=(2048,))

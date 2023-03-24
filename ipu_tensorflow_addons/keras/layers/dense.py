@@ -294,6 +294,7 @@ class Dense(keras.layers.Dense):
   An example of using this layer in a Functional model:
 
   .. code-block:: python
+
     from tensorflow.python.ipu.ops.f8_ops import create_metadata, Format
     from keras.ipu.layers import Dense, ConvertToF8
     from tensorflow.python.ipu.ipu_strategy import IPUStrategyV1
